@@ -59,3 +59,78 @@ function isLocalJavastackImport(
 }
 
 export const javastackExtensions = ['.java', '.kt', '.groovy', '.scala'];
+
+export const javastackIgnoreList = [
+    // Build and output directories
+    'target', // Maven
+    'build', // Gradle
+    'out', // IntelliJ/Eclipse
+
+    // IDE metadata and configurations
+    '.classpath',
+    '.project', // Eclipse
+    '.idea', // IntelliJ IDEA
+    '.vscode', // VS Code
+    '.settings', // Eclipse
+
+    // Version control metadata
+    '.git',
+    '.svn',
+
+    // Test files and directories
+    'src/test', // Common test directory for all languages
+    '*.test.java',
+    '*.test.kt',
+    '*.test.scala',
+    '*.test.groovy',
+    '*.spec.java',
+    '*.spec.kt',
+    '*.spec.scala',
+    '*.spec.groovy',
+    'jacoco', // Code coverage
+    '.nyc_output', // Code coverage
+
+    // Binary files and libraries
+    '*.class', // Compiled Java/Kotlin/Scala/Groovy files
+    '*.jar', // Java archives
+    '*.war', // Web application archives
+    '*.ear', // Enterprise application archives
+    '*.kts', // Kotlin scripts
+
+    // Logs and temporary files
+    '*.log',
+    '*.tmp',
+    '*.bak',
+    '*.swp',
+
+    // Documentation and resources
+    'docs',
+    '*.md',
+    '*.png',
+    '*.jpg',
+    '*.svg',
+    '*.sql',
+
+    // Libraries and dependencies
+    'lib',
+    'libs',
+    'node_modules',
+    '*.zip',
+    '*.tar.gz',
+
+    // Gradle and Maven specific files
+    '*.iml', // IntelliJ IDEA module files
+    'build.gradle',
+    'build.gradle.kts', // Gradle build scripts
+    'settings.gradle',
+    'settings.gradle.kts', // Gradle settings
+    'pom.xml', // Maven build configuration
+    '*.ivy',
+    '*.ivy.xml', // Ivy build files
+    '*.sbt', // SBT build files (Scala)
+
+    // Scala and Groovy specific
+    '.metals', // Scala Metals IDE files
+    '.bloop', // Scala build tools
+    'groovyc', // Groovy compiled outputs
+];

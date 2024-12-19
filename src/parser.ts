@@ -13,6 +13,7 @@ import {
     extractLibrariesFromJavastackFile,
     inferJavaLocalPrefixes,
     javastackExtensions,
+    javastackIgnoreList,
 } from './javastackUtil';
 
 //TODO: handle javascript absolut imports
@@ -22,10 +23,11 @@ async function extractLibrariesFromRepo(
 ): Promise<ExtractedLibraries> {
     console.time('extractLibrariesFromRepo');
     const extensions = [...javascriptExtensions, ...javastackExtensions];
-    const ignoreList = javascriptIgnoreList;
+    const ignoreList = [...javascriptIgnoreList, ...javastackIgnoreList];
 
     // Infer java local prefixes
     const javaLocalPrefixes = await inferJavaLocalPrefixes(repoPath);
+
     const files = await getAllFiles(repoPath, extensions, ignoreList); // Recursively get all matching files
     const libraries: ExtractedLibraries = {};
 
