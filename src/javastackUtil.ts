@@ -3,7 +3,7 @@ import path from 'path';
 import { ImportStatement } from './types';
 import { getLanguageByExtension } from './util';
 
-export async function extractLibrariesFromJavastackFile(
+export async function extractImportsFromJavastackFile(
     filePath: string,
     relativePath: string,
     localPrefixes: string[],

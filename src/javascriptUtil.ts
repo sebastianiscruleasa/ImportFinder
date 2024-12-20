@@ -9,7 +9,7 @@ import { isStringLiteral } from './util';
  * @returns True if the import path is local, false otherwise
  */
 export function isLocalImportJavascript(importPath: string): boolean {
-    // Returns true for local imports, false for external libraries
+    // Returns true for local imports, false for external imports
     return (
         importPath.startsWith('./') ||
         importPath.startsWith('../') ||
@@ -17,7 +17,7 @@ export function isLocalImportJavascript(importPath: string): boolean {
     );
 }
 
-export async function extractLibrariesFromJavascriptTypescriptFile(
+export async function extractImportsFromJavascriptTypescriptFile(
     filePath: string,
 ): Promise<string[]> {
     try {
@@ -37,7 +37,6 @@ export async function extractLibrariesFromJavascriptTypescriptFile(
             ],
         });
 
-        // Extract libraries
         const librarySet = new Set<string>();
         traverse(ast, {
             // Check for import statements commonly used in E6+ modules

@@ -1,11 +1,11 @@
-import { getAllFiles, removeRepoPath, saveLibrariesToFile } from './util';
+import { getAllFiles, removeRepoPath, saveImportsToFile } from './util';
 import {
-    extractLibrariesFromJavascriptTypescriptFile,
+    extractImportsFromJavascriptTypescriptFile,
     javascriptExtensions,
     javascriptIgnoreList,
 } from './javascriptUtil';
 import {
-    extractLibrariesFromJavastackFile,
+    extractImportsFromJavastackFile,
     inferJavaLocalPrefixes,
     javastackExtensions,
     javastackIgnoreList,
@@ -14,10 +14,10 @@ import { ImportStatement } from './types';
 
 //TODO: handle javascript absolut imports
 
-async function extractLibrariesFromRepo(
+async function extractImportsFromRepo(
     repoPath: string,
 ): Promise<ImportStatement[]> {
-    console.time('extractLibrariesFromRepo');
+    console.time('extractImportsFromRepo');
     const extensions = [...javascriptExtensions, ...javastackExtensions];
     const ignoreList = [...javascriptIgnoreList, ...javastackIgnoreList];
 
@@ -35,7 +35,7 @@ async function extractLibrariesFromRepo(
         //         await extractLibrariesFromJavascriptTypescriptFile(file);
         // } else
         if (javastackExtensions.includes(fileExtension)) {
-            const javaImports = await extractLibrariesFromJavastackFile(
+            const javaImports = await extractImportsFromJavastackFile(
                 file,
                 relativePath,
                 javaLocalPrefixes,
@@ -46,12 +46,12 @@ async function extractLibrariesFromRepo(
         }
     }
 
-    console.timeEnd('extractLibrariesFromRepo');
+    console.timeEnd('extractImportsFromRepo');
     return importStatements;
 }
 
 (async () => {
-    const outputPath = './extracted-libraries.json'; // Define the output file name
+    const outputPath = './extracted-imports.json'; // Define the output file name
 
     // Get the folder path from command-line arguments
     const args = process.argv.slice(2);
@@ -64,9 +64,9 @@ async function extractLibrariesFromRepo(
     const repoPath = args[0];
 
     try {
-        const libraries = await extractLibrariesFromRepo(repoPath);
-        await saveLibrariesToFile(libraries, outputPath);
-        console.log(`Libraries extracted and saved to ${outputPath}`);
+        const imports = await extractImportsFromRepo(repoPath);
+        await saveImportsToFile(imports, outputPath);
+        console.log(`Imports extracted and saved to ${outputPath}`);
     } catch (error) {
         console.error(
             'An error occurred during the extraction process:',

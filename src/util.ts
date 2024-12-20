@@ -49,7 +49,7 @@ export async function getAllFiles(
     return allFiles;
 }
 
-export async function saveLibrariesToFile(
+export async function saveImportsToFile(
     importStatements: ImportStatement[],
     outputPath: string,
 ): Promise<void> {
@@ -61,10 +61,10 @@ export async function saveLibrariesToFile(
         await fs.writeFile(outputPath, data, 'utf8');
     } catch (error) {
         if (error instanceof Error) {
-            console.error(`Failed to save libraries to file: ${error.message}`);
+            console.error(`Failed to save imports to file: ${error.message}`);
         } else {
             console.error(
-                `Failed to save libraries to file due to unknown error: ${error}`,
+                `Failed to save imports to file due to unknown error: ${error}`,
             );
         }
     }

@@ -6,5 +6,5 @@ gen
 
 node_modules
 
-extracted-libraries.json
+extracted-imports.json
 
