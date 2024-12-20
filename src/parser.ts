@@ -1,9 +1,4 @@
-import {
-    ExtractedLibraries,
-    getAllFiles,
-    removeRepoPath,
-    saveLibrariesToFile,
-} from './util';
+import { getAllFiles, removeRepoPath, saveLibrariesToFile } from './util';
 import {
     extractLibrariesFromJavascriptTypescriptFile,
     javascriptExtensions,
@@ -15,12 +10,13 @@ import {
     javastackExtensions,
     javastackIgnoreList,
 } from './javastackUtil';
+import { ImportStatement } from './types';
 
 //TODO: handle javascript absolut imports
 
 async function extractLibrariesFromRepo(
     repoPath: string,
-): Promise<ExtractedLibraries> {
+): Promise<ImportStatement[]> {
     console.time('extractLibrariesFromRepo');
     const extensions = [...javascriptExtensions, ...javastackExtensions];
     const ignoreList = [...javascriptIgnoreList, ...javastackIgnoreList];
@@ -29,26 +25,29 @@ async function extractLibrariesFromRepo(
     const javaLocalPrefixes = await inferJavaLocalPrefixes(repoPath);
 
     const files = await getAllFiles(repoPath, extensions, ignoreList); // Recursively get all matching files
-    const libraries: ExtractedLibraries = {};
+    const importStatements: ImportStatement[] = [];
 
     for (const file of files) {
-        const relativePath = removeRepoPath(repoPath, file); // Convert to relative path
-        const fileExtension = relativePath.slice(relativePath.lastIndexOf('.'));
-        if (javascriptExtensions.includes(fileExtension)) {
-            libraries[relativePath] =
-                await extractLibrariesFromJavascriptTypescriptFile(file);
-        } else if (javastackExtensions.includes(fileExtension)) {
-            libraries[relativePath] = await extractLibrariesFromJavastackFile(
+        const fileExtension = file.slice(file.lastIndexOf('.'));
+        const relativePath = removeRepoPath(repoPath, file);
+        // if (javascriptExtensions.includes(fileExtension)) {
+        //     libraries[relativePath] =
+        //         await extractLibrariesFromJavascriptTypescriptFile(file);
+        // } else
+        if (javastackExtensions.includes(fileExtension)) {
+            const javaImports = await extractLibrariesFromJavastackFile(
                 file,
+                relativePath,
                 javaLocalPrefixes,
             );
+            importStatements.push(...javaImports);
         } else {
             console.log(`Skipping unsupported file type: ${fileExtension}`);
         }
     }
 
     console.timeEnd('extractLibrariesFromRepo');
-    return libraries;
+    return importStatements;
 }
 
 (async () => {

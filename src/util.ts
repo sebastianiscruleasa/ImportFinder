@@ -1,6 +1,7 @@
 import { Node } from '@babel/types';
 import * as fs from 'fs-extra';
 import path from 'path';
+import { ImportStatement } from './types';
 
 export function isStringLiteral(node: Node) {
     return node.type === 'StringLiteral';
@@ -48,16 +49,13 @@ export async function getAllFiles(
     return allFiles;
 }
 
-// Define a type for the extracted libraries object
-export type ExtractedLibraries = Record<string, string[]>;
-
 export async function saveLibrariesToFile(
-    libraries: ExtractedLibraries,
+    importStatements: ImportStatement[],
     outputPath: string,
 ): Promise<void> {
     try {
         // Format the data as JSON
-        const data = JSON.stringify(libraries, null, 2); // Pretty print with 2 spaces
+        const data = JSON.stringify(importStatements, null, 2); // Pretty print with 2 spaces
 
         // Write to file
         await fs.writeFile(outputPath, data, 'utf8');
@@ -70,4 +68,20 @@ export async function saveLibrariesToFile(
             );
         }
     }
+}
+
+export function getLanguageByExtension(extension: string): string {
+    const extensionToLanguage: Record<string, string> = {
+        '.java': 'Java',
+        '.kt': 'Kotlin',
+        '.kts': 'Kotlin',
+        '.groovy': 'Groovy',
+        '.scala': 'Scala',
+        '.js': 'JavaScript',
+        '.ts': 'TypeScript',
+        '.jsx': 'JavaScript (JSX)',
+        '.tsx': 'TypeScript (TSX)',
+    };
+
+    return extensionToLanguage[extension] || 'Unknown';
 }
