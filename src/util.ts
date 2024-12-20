@@ -103,7 +103,6 @@ export async function saveImportsToCsvFile(
     // Write the CSV content to file
     try {
         await fs.writeFile(filePath, csvContent, 'utf8');
-        console.log(`Data saved as CSV to ${filePath}`);
     } catch (error) {
         console.error(`Failed to save CSV file: ${error}`);
     }

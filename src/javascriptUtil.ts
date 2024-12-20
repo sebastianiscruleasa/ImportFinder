@@ -1,7 +1,8 @@
 import * as fs from 'fs-extra';
 import * as babelParser from '@babel/parser';
 import traverse from '@babel/traverse';
-import { isStringLiteral } from './util';
+import { getLanguageByExtension, isStringLiteral } from './util';
+import { ImportStatement } from './types';
 
 /**
  * Determine if an import path is local
@@ -19,8 +20,10 @@ export function isLocalImportJavascript(importPath: string): boolean {
 
 export async function extractImportsFromJavascriptTypescriptFile(
     filePath: string,
-): Promise<string[]> {
+    relativePath: string,
+): Promise<ImportStatement[]> {
     try {
+        const extension = filePath.slice(filePath.lastIndexOf('.'));
         // Read file content
         const code = await fs.readFile(filePath, 'utf8');
 
@@ -37,7 +40,7 @@ export async function extractImportsFromJavascriptTypescriptFile(
             ],
         });
 
-        const librarySet = new Set<string>();
+        const importStatements: ImportStatement[] = [];
         traverse(ast, {
             // Check for import statements commonly used in E6+ modules
             // import something from 'some-library';
@@ -48,7 +51,57 @@ export async function extractImportsFromJavascriptTypescriptFile(
                     isStringLiteral(node.source) &&
                     !isLocalImportJavascript(node.source.value)
                 ) {
-                    librarySet.add(node.source.value);
+                    const library = node.source.value;
+                    const fullImport =
+                        typeof node.start === 'number' &&
+                        typeof node.end === 'number'
+                            ? code.slice(node.start, node.end)
+                            : `import ... from '${library}'`;
+                    const importedEntities = node.specifiers
+                        .map((specifier) => {
+                            if (specifier.type === 'ImportDefaultSpecifier') {
+                                return {
+                                    name: specifier.local.name,
+                                    modifier: null,
+                                }; // Default imports
+                            }
+                            if (specifier.type === 'ImportSpecifier') {
+                                const importedName =
+                                    specifier.imported.type === 'Identifier'
+                                        ? specifier.imported.name // Use `name` if it's an Identifier
+                                        : specifier.imported.value; // Use `value` if it's a StringLiteral
+                                const hasAlias =
+                                    importedName !== specifier.local.name;
+                                return {
+                                    name: specifier.local.name,
+                                    modifier: hasAlias ? 'alias' : null,
+                                }; // Named imports with or without alias
+                            }
+                            if (specifier.type === 'ImportNamespaceSpecifier') {
+                                return {
+                                    name: `* as ${specifier.local.name}`,
+                                    modifier: 'wildcard',
+                                }; // Namespace imports
+                            }
+                        })
+                        .filter((entity) => entity != undefined);
+
+                    // Extract modifiers
+                    const modifiers = importedEntities
+                        .map((entity) => entity.modifier)
+                        .filter((modifier) => modifier !== null); // Filter out nulls
+
+                    importStatements.push({
+                        file: relativePath,
+                        importedEntity: importedEntities
+                            .filter(Boolean)
+                            .map((entity) => entity!.name)
+                            .join(', '), // Concatenate all valid imported entities
+                        modifiers: modifiers.length > 0 ? modifiers : [],
+                        language: getLanguageByExtension(extension),
+                        library: library,
+                        fullImport: fullImport,
+                    });
                 }
             },
             // Check for require statements commonly used in CommonJS modules
@@ -61,7 +114,20 @@ export async function extractImportsFromJavascriptTypescriptFile(
                     isStringLiteral(node.arguments[0]) &&
                     !isLocalImportJavascript(node.arguments[0].value)
                 ) {
-                    librarySet.add(node.arguments[0].value);
+                    const library = node.arguments[0].value;
+                    const fullImport =
+                        typeof node.start === 'number' &&
+                        typeof node.end === 'number'
+                            ? code.slice(node.start, node.end)
+                            : `const ... = require('${library}');`;
+                    importStatements.push({
+                        file: relativePath,
+                        importedEntity: '', // No `importedEntity` for require
+                        modifiers: [], // No modifiers for require
+                        language: getLanguageByExtension(extension),
+                        library: library,
+                        fullImport: fullImport,
+                    });
                 }
             },
             // This handles dynamic import() calls, often used for code-splitting
@@ -72,12 +138,25 @@ export async function extractImportsFromJavascriptTypescriptFile(
                     isStringLiteral(node.source) &&
                     !isLocalImportJavascript(node.source.value)
                 ) {
-                    librarySet.add(node.source.value);
+                    const library = node.source.value;
+                    const fullImport =
+                        typeof node.start === 'number' &&
+                        typeof node.end === 'number'
+                            ? code.slice(node.start, node.end)
+                            : `import('${library}');`;
+                    importStatements.push({
+                        file: relativePath,
+                        importedEntity: '', // No `importedEntity` for dynamic imports
+                        modifiers: [], // No modifiers for dynamic imports
+                        language: getLanguageByExtension(extension),
+                        library: library,
+                        fullImport: fullImport,
+                    });
                 }
             },
         });
 
-        return Array.from(librarySet);
+        return importStatements;
     } catch (error) {
         // Log error with the file name
         console.error(`Failed to process file: ${filePath}`);

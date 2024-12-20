@@ -35,17 +35,20 @@ async function extractImportsFromRepo(
     for (const file of files) {
         const fileExtension = file.slice(file.lastIndexOf('.'));
         const relativePath = removeRepoPath(repoPath, file);
-        // if (javascriptExtensions.includes(fileExtension)) {
-        //     libraries[relativePath] =
-        //         await extractLibrariesFromJavascriptTypescriptFile(file);
-        // } else
-        if (javastackExtensions.includes(fileExtension)) {
-            const javaImports = await extractImportsFromJavastackFile(
+        if (javascriptExtensions.includes(fileExtension)) {
+            const javascriptTypescriptImports =
+                await extractImportsFromJavascriptTypescriptFile(
+                    file,
+                    relativePath,
+                );
+            importStatements.push(...javascriptTypescriptImports);
+        } else if (javastackExtensions.includes(fileExtension)) {
+            const javastackImports = await extractImportsFromJavastackFile(
                 file,
                 relativePath,
                 javaLocalPrefixes,
             );
-            importStatements.push(...javaImports);
+            importStatements.push(...javastackImports);
         } else {
             console.log(`Skipping unsupported file type: ${fileExtension}`);
         }
