@@ -1,4 +1,9 @@
-import { getAllFiles, removeRepoPath, saveImportsToFile } from './util';
+import {
+    getAllFiles,
+    removeRepoPath,
+    saveImportsToCsvFile,
+    saveImportsToJsonFile,
+} from './util';
 import {
     extractImportsFromJavascriptTypescriptFile,
     javascriptExtensions,
@@ -65,7 +70,8 @@ async function extractImportsFromRepo(
 
     try {
         const imports = await extractImportsFromRepo(repoPath);
-        await saveImportsToFile(imports, outputPath);
+        // await saveImportsToJsonFile(imports, './extracted-imports.json');
+        await saveImportsToCsvFile(imports, './extracted-imports.csv');
         console.log(`Imports extracted and saved to ${outputPath}`);
     } catch (error) {
         console.error(

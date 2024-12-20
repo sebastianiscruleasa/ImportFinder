@@ -49,7 +49,7 @@ export async function getAllFiles(
     return allFiles;
 }
 
-export async function saveImportsToFile(
+export async function saveImportsToJsonFile(
     importStatements: ImportStatement[],
     outputPath: string,
 ): Promise<void> {
@@ -67,6 +67,45 @@ export async function saveImportsToFile(
                 `Failed to save imports to file due to unknown error: ${error}`,
             );
         }
+    }
+}
+
+export async function saveImportsToCsvFile(
+    data: ImportStatement[],
+    filePath: string,
+): Promise<void> {
+    // Extract headers from object keys
+    const headers = Object.keys(data[0]);
+
+    // Create the CSV content
+    const csvContent = [
+        headers.join(','), // Add headers row
+        ...data.map(
+            (row) =>
+                headers
+                    .map((header) => {
+                        const value = row[header as keyof ImportStatement];
+                        if (Array.isArray(value)) {
+                            // Join arrays with a delimiter
+                            return value.join(' '); // For modifiers: "static wildcard"
+                        }
+                        const stringValue = String(value || '');
+                        // Escape fields with commas, quotes, or newlines
+                        if (/[,"\n]/.test(stringValue)) {
+                            return `"${stringValue.replace(/"/g, '""')}"`;
+                        }
+                        return stringValue;
+                    })
+                    .join(','), // Separate fields with commas
+        ),
+    ].join('\n');
+
+    // Write the CSV content to file
+    try {
+        await fs.writeFile(filePath, csvContent, 'utf8');
+        console.log(`Data saved as CSV to ${filePath}`);
+    } catch (error) {
+        console.error(`Failed to save CSV file: ${error}`);
     }
 }
 
