@@ -6,7 +6,7 @@ import { getLanguageByExtension } from './util';
 export async function extractImportsFromJavastackFile(
     filePath: string,
     relativePath: string,
-    localPrefixes: string[],
+    groupIds: string[],
 ): Promise<ImportStatement[]> {
     try {
         const extension = filePath.slice(filePath.lastIndexOf('.'));
@@ -23,7 +23,7 @@ export async function extractImportsFromJavastackFile(
         while ((match = importRegex.exec(code)) !== null) {
             const importPath = match[2];
 
-            if (!isLocalJavastackImport(importPath, localPrefixes)) {
+            if (!isLocalJavastackImport(importPath, groupIds)) {
                 const isStatic = match[1] !== undefined;
                 const isWildcard = match[3] !== undefined;
                 const alias = match[4];
@@ -101,35 +101,56 @@ export function parseImportPathUsingCapital(
     return { library: '', importedEntity: importPath };
 }
 
-// Search for the first pom.xml file in a directory tree using BFS.
-export async function inferJavaLocalPrefixes(
-    repoPath: string,
-): Promise<string[]> {
-    const groupIdRegex = /<groupId>([\w.]+)<\/groupId>/;
-    const queue: string[] = [repoPath]; // Initialize the BFS queue with the root path
+export async function findRootPomXmlPaths(repoPath: string): Promise<string[]> {
+    const queue: string[] = [repoPath];
+    const pomPaths: Set<string> = new Set();
+    const visitedRoots: Set<string> = new Set(); // Track processed root directories
 
     while (queue.length > 0) {
-        const currentDir = queue.shift()!; // Dequeue the next directory to process
+        const currentDir = queue.shift()!;
         const entries = await fs.readdir(currentDir, { withFileTypes: true });
 
         for (const entry of entries) {
             const fullPath = path.join(currentDir, entry.name);
 
             if (entry.isFile() && entry.name === 'pom.xml') {
-                // Found a pom.xml file, extract and return the groupId
-                const pomContent = await fs.readFile(fullPath, 'utf8');
-                const match = pomContent.match(groupIdRegex);
-                if (match) {
-                    return [match[1]]; // Return the groupId as the prefix
+                const rootDir = path.dirname(fullPath);
+
+                // Avoid processing submodules by ensuring we only collect one pom.xml per root directory
+                if (!visitedRoots.has(rootDir)) {
+                    visitedRoots.add(rootDir); // Mark directory as processed
+                    pomPaths.add(fullPath); // Store the root pom.xml path
                 }
             } else if (entry.isDirectory()) {
-                // Enqueue subdirectory for further exploration
                 queue.push(fullPath);
             }
         }
     }
 
-    return []; // Fallback if no pom.xml or groupId is found
+    return Array.from(pomPaths);
+}
+
+export async function extractGroupIdsFromPoms(
+    pomXmlPaths: string[],
+): Promise<string[]> {
+    const groupIdRegex = /<groupId>([\w.]+)<\/groupId>/;
+    const groupIds: Set<string> = new Set();
+
+    for (const pomPath of pomXmlPaths) {
+        try {
+            const pomContent = await fs.readFile(pomPath, 'utf8');
+            const match = pomContent.match(groupIdRegex);
+            if (match) {
+                groupIds.add(match[1]); // Store unique groupIds
+            } else {
+                console.warn(`No <groupId> found in ${pomPath}`);
+            }
+        } catch (error) {
+            console.error(`Error reading ${pomPath}:`, error);
+        }
+    }
+
+    return Array.from(groupIds);
 }
 
 // Function to determine if an import is local

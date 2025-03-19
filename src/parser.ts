@@ -10,8 +10,9 @@ import {
     javascriptIgnoreList,
 } from './javascriptUtil';
 import {
+    extractGroupIdsFromPoms,
     extractImportsFromJavastackFile,
-    inferJavaLocalPrefixes,
+    findRootPomXmlPaths,
     javastackExtensions,
     javastackIgnoreList,
 } from './javastackUtil';
@@ -26,8 +27,9 @@ async function extractImportsFromRepo(
     const extensions = [...javascriptExtensions, ...javastackExtensions];
     const ignoreList = [...javascriptIgnoreList, ...javastackIgnoreList];
 
-    // Infer java local prefixes
-    const javaLocalPrefixes = await inferJavaLocalPrefixes(repoPath);
+    // Infer java local prefix
+    const rootPomXmlPaths = await findRootPomXmlPaths(repoPath);
+    const groupIds = await extractGroupIdsFromPoms(rootPomXmlPaths);
 
     const files = await getAllFiles(repoPath, extensions, ignoreList); // Recursively get all matching files
     const importStatements: ImportStatement[] = [];
@@ -46,7 +48,7 @@ async function extractImportsFromRepo(
             const javastackImports = await extractImportsFromJavastackFile(
                 file,
                 relativePath,
-                javaLocalPrefixes,
+                groupIds,
             );
             importStatements.push(...javastackImports);
         } else {
@@ -59,8 +61,6 @@ async function extractImportsFromRepo(
 }
 
 (async () => {
-    const outputPath = './extracted-imports.json'; // Define the output file name
-
     // Get the folder path from command-line arguments
     const args = process.argv.slice(2);
     if (args.length === 0) {
@@ -73,9 +73,8 @@ async function extractImportsFromRepo(
 
     try {
         const imports = await extractImportsFromRepo(repoPath);
-        // await saveImportsToJsonFile(imports, './extracted-imports.json');
-        await saveImportsToCsvFile(imports, './extracted-imports.csv');
-        console.log(`Imports extracted and saved to ${outputPath}`);
+        await saveImportsToJsonFile(imports, './extracted-imports.json');
+        // await saveImportsToCsvFile(imports, './extracted-imports.csv');
     } catch (error) {
         console.error(
             'An error occurred during the extraction process:',
