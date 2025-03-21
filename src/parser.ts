@@ -1,9 +1,4 @@
-import {
-    getAllFiles,
-    removeRepoPath,
-    saveImportsToCsvFile,
-    saveImportsToJsonFile,
-} from './util';
+import { getAllFiles, saveImportsToJsonFile } from './util';
 import {
     extractImportsFromJavascriptTypescriptFile,
     javascriptExtensions,
@@ -12,7 +7,9 @@ import {
 import {
     extractGroupIdsFromPoms,
     extractImportsFromJavastackFile,
+    findProjectPath,
     findRootPomXmlPaths,
+    generatePackageToJarMaps,
     javastackExtensions,
     javastackIgnoreList,
 } from './javastackUtil';
@@ -27,28 +24,36 @@ async function extractImportsFromRepo(
     const extensions = [...javascriptExtensions, ...javastackExtensions];
     const ignoreList = [...javascriptIgnoreList, ...javastackIgnoreList];
 
-    // Infer java local prefix
-    const rootPomXmlPaths = await findRootPomXmlPaths(repoPath);
-    const groupIds = await extractGroupIdsFromPoms(rootPomXmlPaths);
-
     const files = await getAllFiles(repoPath, extensions, ignoreList); // Recursively get all matching files
     const importStatements: ImportStatement[] = [];
 
+    const rootPomXmlPaths = await findRootPomXmlPaths(repoPath);
+    const groupIds = await extractGroupIdsFromPoms(rootPomXmlPaths);
+    const rootToPackageToJarMap =
+        await generatePackageToJarMaps(rootPomXmlPaths);
+
     for (const file of files) {
         const fileExtension = file.slice(file.lastIndexOf('.'));
-        const relativePath = removeRepoPath(repoPath, file);
         if (javascriptExtensions.includes(fileExtension)) {
             const javascriptTypescriptImports =
                 await extractImportsFromJavascriptTypescriptFile(
                     file,
-                    relativePath,
+                    repoPath,
                 );
             importStatements.push(...javascriptTypescriptImports);
         } else if (javastackExtensions.includes(fileExtension)) {
+            const projectPath = findProjectPath(
+                file,
+                Array.from(rootToPackageToJarMap.keys()),
+            );
+
             const javastackImports = await extractImportsFromJavastackFile(
                 file,
-                relativePath,
+                repoPath,
                 groupIds,
+                projectPath
+                    ? rootToPackageToJarMap.get(projectPath)
+                    : undefined,
             );
             importStatements.push(...javastackImports);
         } else {
@@ -73,7 +78,7 @@ async function extractImportsFromRepo(
 
     try {
         const imports = await extractImportsFromRepo(repoPath);
-        await saveImportsToJsonFile(imports, './extracted-imports.json');
+        await saveImportsToJsonFile(imports, './extracted-imports1.json');
         // await saveImportsToCsvFile(imports, './extracted-imports.csv');
     } catch (error) {
         console.error(

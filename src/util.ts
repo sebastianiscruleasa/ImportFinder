@@ -54,10 +54,8 @@ export async function saveImportsToJsonFile(
     outputPath: string,
 ): Promise<void> {
     try {
-        // Format the data as JSON
-        const data = JSON.stringify(importStatements, null, 2); // Pretty print with 2 spaces
+        const data = JSON.stringify(importStatements, null, 2);
 
-        // Write to file
         await fs.writeFile(outputPath, data, 'utf8');
     } catch (error) {
         if (error instanceof Error) {

@@ -1,7 +1,11 @@
 import * as fs from 'fs-extra';
 import * as babelParser from '@babel/parser';
 import traverse from '@babel/traverse';
-import { getLanguageByExtension, isStringLiteral } from './util';
+import {
+    getLanguageByExtension,
+    isStringLiteral,
+    removeRepoPath,
+} from './util';
 import { ImportStatement } from './types';
 
 /**
@@ -20,9 +24,10 @@ export function isLocalImportJavascript(importPath: string): boolean {
 
 export async function extractImportsFromJavascriptTypescriptFile(
     filePath: string,
-    relativePath: string,
+    repoPath: string,
 ): Promise<ImportStatement[]> {
     try {
+        const relativePath = removeRepoPath(repoPath, filePath);
         const extension = filePath.slice(filePath.lastIndexOf('.'));
         // Read file content
         const code = await fs.readFile(filePath, 'utf8');
