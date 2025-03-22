@@ -63,7 +63,7 @@ export async function saveImportsToJsonFile(
 
 export async function saveImportsToCsvFile(
     data: ImportStatement[],
-    filePath: string,
+    outputPath: string,
 ): Promise<void> {
     const headers = Object.keys(data[0]);
 
@@ -90,7 +90,7 @@ export async function saveImportsToCsvFile(
     ].join('\n');
 
     try {
-        await fs.writeFile(filePath, csvContent, 'utf8');
+        await fs.writeFile(outputPath, csvContent, 'utf8');
     } catch (error) {
         console.error(`Failed to save CSV file: ${error}`);
     }
