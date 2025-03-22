@@ -15,8 +15,6 @@ import {
 } from './javaUtil';
 import { ImportStatement } from './types';
 
-//TODO: handle javascript absolut imports
-
 async function extractImportsFromRepo(
     repoPath: string,
 ): Promise<ImportStatement[]> {
@@ -67,7 +65,6 @@ async function extractImportsFromRepo(
 }
 
 (async () => {
-    // Get the folder path from command-line arguments
     const args = process.argv.slice(2);
     if (args.length === 0) {
         console.error(
