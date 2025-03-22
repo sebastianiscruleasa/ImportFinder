@@ -5,7 +5,7 @@ import {
     javascriptIgnoreList,
 } from './javascriptUtil';
 import {
-    extractGroupIdsFromPoms,
+    findGroupIds,
     extractImportsFromJavaFile,
     findProjectPath,
     findRootPomXmlPaths,
@@ -28,9 +28,10 @@ async function extractImportsFromRepo(
     const importStatements: ImportStatement[] = [];
 
     const rootPomXmlPaths = await findRootPomXmlPaths(repoPath);
-    const groupIds = await extractGroupIdsFromPoms(rootPomXmlPaths);
-    const rootToPackageToJarMap =
-        await generatePackageToJarMaps(rootPomXmlPaths);
+    const [groupIds, rootToPackageToJarMap] = await Promise.all([
+        findGroupIds(rootPomXmlPaths),
+        generatePackageToJarMaps(rootPomXmlPaths),
+    ]);
 
     for (const file of files) {
         const fileExtension = file.slice(file.lastIndexOf('.'));

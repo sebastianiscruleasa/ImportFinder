@@ -117,6 +117,56 @@ function fallbackForNotFindingJarMatch(
     return { library: '', importedEntity: importPath };
 }
 
+export async function findRootPomXmlPaths(repoPath: string): Promise<string[]> {
+    const queue: string[] = [repoPath];
+    const pomPaths: Set<string> = new Set();
+    const visitedRoots: Set<string> = new Set();
+
+    while (queue.length > 0) {
+        const currentDir = queue.shift()!;
+        const entries = await fs.readdir(currentDir, { withFileTypes: true });
+
+        for (const entry of entries) {
+            const fullPath = path.join(currentDir, entry.name);
+
+            if (entry.isFile() && entry.name === 'pom.xml') {
+                const rootDir = path.dirname(fullPath);
+
+                // Avoid processing submodules by ensuring we only collect one pom.xml per root directory
+                if (!visitedRoots.has(rootDir)) {
+                    visitedRoots.add(rootDir);
+                    pomPaths.add(fullPath);
+                }
+            } else if (entry.isDirectory()) {
+                queue.push(fullPath);
+            }
+        }
+    }
+
+    return Array.from(pomPaths);
+}
+
+export async function findGroupIds(pomXmlPaths: string[]): Promise<string[]> {
+    const groupIdRegex = /<groupId>([\w.]+)<\/groupId>/;
+    const groupIds: Set<string> = new Set();
+
+    for (const pomPath of pomXmlPaths) {
+        try {
+            const pomContent = await fs.readFile(pomPath, 'utf8');
+            const match = pomContent.match(groupIdRegex);
+            if (match) {
+                groupIds.add(match[1]);
+            } else {
+                console.warn(`No <groupId> found in ${pomPath}`);
+            }
+        } catch (error) {
+            console.error(`Error reading ${pomPath}:`, error);
+        }
+    }
+
+    return Array.from(groupIds);
+}
+
 interface ImportToJarMapping {
     jar: string;
     entity: string;
@@ -220,58 +270,6 @@ async function findBuiltJarName(projectPath: string): Promise<string | null> {
         console.error(`Failed to find JAR in ${projectPath}/target`, error);
         return null;
     }
-}
-
-export async function findRootPomXmlPaths(repoPath: string): Promise<string[]> {
-    const queue: string[] = [repoPath];
-    const pomPaths: Set<string> = new Set();
-    const visitedRoots: Set<string> = new Set();
-
-    while (queue.length > 0) {
-        const currentDir = queue.shift()!;
-        const entries = await fs.readdir(currentDir, { withFileTypes: true });
-
-        for (const entry of entries) {
-            const fullPath = path.join(currentDir, entry.name);
-
-            if (entry.isFile() && entry.name === 'pom.xml') {
-                const rootDir = path.dirname(fullPath);
-
-                // Avoid processing submodules by ensuring we only collect one pom.xml per root directory
-                if (!visitedRoots.has(rootDir)) {
-                    visitedRoots.add(rootDir);
-                    pomPaths.add(fullPath);
-                }
-            } else if (entry.isDirectory()) {
-                queue.push(fullPath);
-            }
-        }
-    }
-
-    return Array.from(pomPaths);
-}
-
-export async function extractGroupIdsFromPoms(
-    pomXmlPaths: string[],
-): Promise<string[]> {
-    const groupIdRegex = /<groupId>([\w.]+)<\/groupId>/;
-    const groupIds: Set<string> = new Set();
-
-    for (const pomPath of pomXmlPaths) {
-        try {
-            const pomContent = await fs.readFile(pomPath, 'utf8');
-            const match = pomContent.match(groupIdRegex);
-            if (match) {
-                groupIds.add(match[1]); // Store unique groupIds
-            } else {
-                console.warn(`No <groupId> found in ${pomPath}`);
-            }
-        } catch (error) {
-            console.error(`Error reading ${pomPath}:`, error);
-        }
-    }
-
-    return Array.from(groupIds);
 }
 
 export function findProjectPath(
