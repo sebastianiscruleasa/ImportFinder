@@ -24,7 +24,7 @@ async function extractImportsFromRepo(
     const extensions = [...javascriptExtensions, ...javaExtensions];
     const ignoreList = [...javascriptIgnoreList, ...javaIgnoreList];
 
-    const files = await getAllFiles(repoPath, extensions, ignoreList); // Recursively get all matching files
+    const files = await getAllFiles(repoPath, extensions, ignoreList);
     const importStatements: ImportStatement[] = [];
 
     const rootPomXmlPaths = await findRootPomXmlPaths(repoPath);

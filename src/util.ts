@@ -1,4 +1,4 @@
-import * as fs from 'fs-extra';
+import * as fs from 'fs/promises';
 import path from 'path';
 import { ImportStatement } from './types';
 

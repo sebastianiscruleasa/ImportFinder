@@ -1,4 +1,4 @@
-import * as fs from 'fs-extra';
+import * as fs from 'fs/promises';
 import path from 'path';
 import { ImportStatement } from './types';
 import { getLanguageByExtension, removeRepoPath } from './util';
@@ -13,7 +13,7 @@ export async function extractImportsFromJavaFile(
     try {
         const relativePath = removeRepoPath(repoPath, filePath);
         const extension = filePath.slice(filePath.lastIndexOf('.'));
-        const code = fs.readFileSync(filePath, 'utf8');
+        const code = await fs.readFile(filePath, 'utf8');
 
         const importStatements: ImportStatement[] = [];
         const importRegex = /^\s*import\s+(static\s+)?([\w.]+)(\.\*)?;\s*$/gm;
@@ -225,7 +225,7 @@ async function findBuiltJarName(projectPath: string): Promise<string | null> {
 export async function findRootPomXmlPaths(repoPath: string): Promise<string[]> {
     const queue: string[] = [repoPath];
     const pomPaths: Set<string> = new Set();
-    const visitedRoots: Set<string> = new Set(); // Track processed root directories
+    const visitedRoots: Set<string> = new Set();
 
     while (queue.length > 0) {
         const currentDir = queue.shift()!;
@@ -239,8 +239,8 @@ export async function findRootPomXmlPaths(repoPath: string): Promise<string[]> {
 
                 // Avoid processing submodules by ensuring we only collect one pom.xml per root directory
                 if (!visitedRoots.has(rootDir)) {
-                    visitedRoots.add(rootDir); // Mark directory as processed
-                    pomPaths.add(fullPath); // Store the root pom.xml path
+                    visitedRoots.add(rootDir);
+                    pomPaths.add(fullPath);
                 }
             } else if (entry.isDirectory()) {
                 queue.push(fullPath);

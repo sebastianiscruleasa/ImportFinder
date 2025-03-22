@@ -1,4 +1,4 @@
-import * as fs from 'fs-extra';
+import * as fs from 'fs/promises';
 import * as babelParser from '@babel/parser';
 import traverse from '@babel/traverse';
 import { getLanguageByExtension, removeRepoPath } from './util';
@@ -11,7 +11,7 @@ export async function extractImportsFromJavascriptTypescriptFile(
     try {
         const relativePath = removeRepoPath(repoPath, filePath);
         const extension = filePath.slice(filePath.lastIndexOf('.'));
-        const code = fs.readFileSync(filePath, 'utf8');
+        const code = await fs.readFile(filePath, 'utf8');
 
         // Parse the content
         const ast = babelParser.parse(code, {
