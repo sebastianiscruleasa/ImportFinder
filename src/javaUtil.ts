@@ -12,41 +12,34 @@ export async function extractImportsFromJavaFile(
 ): Promise<ImportStatement[]> {
     try {
         const relativePath = removeRepoPath(repoPath, filePath);
-
         const extension = filePath.slice(filePath.lastIndexOf('.'));
-        // Read the file content
-        const code = await fs.readFile(filePath, 'utf8');
-
-        // Regex to match import statements
-        const importRegex = /^\s*import\s+(static\s+)?([\w.]+)(\.\*)?;\s*$/gm;
+        const code = fs.readFileSync(filePath, 'utf8');
 
         const importStatements: ImportStatement[] = [];
+        const importRegex = /^\s*import\s+(static\s+)?([\w.]+)(\.\*)?;\s*$/gm;
         let match;
+        while ((match = importRegex.exec(code))) {
+            const importPath = match[2];
 
-        // Apply the regex to find all import statements
-        while ((match = importRegex.exec(code)) !== null) {
-            const importStatement = match[2];
-
-            if (!isLocalJavaImport(importStatement, groupIds)) {
+            if (!isLocalJavaImport(importPath, groupIds)) {
                 const isStatic = match[1] !== undefined;
                 const isWildcard = match[3] !== undefined;
                 const alias = match[4];
-                const { library, importedEntity } =
-                    getLibraryAndImportedEntities(
-                        importStatement,
-                        isStatic,
-                        isWildcard,
-                        packageToJarMap,
-                    );
+                const { library, importedEntity } = getLibraryAndImportedEntity(
+                    importPath,
+                    isStatic,
+                    isWildcard,
+                    packageToJarMap,
+                );
 
                 importStatements.push({
                     file: relativePath,
                     importedEntity: importedEntity,
                     modifiers: [
-                        ...(isStatic ? ['static'] : []),
-                        ...(alias ? [`alias ${alias}`] : []),
-                        ...(isWildcard ? ['wildcard'] : []), // Add `wildcard` if it's a `.*` import
-                    ],
+                        isStatic && 'static',
+                        alias && `alias ${alias}`,
+                        isWildcard && 'wildcard',
+                    ].filter(Boolean) as string[],
                     language: getLanguageByExtension(extension),
                     library: library,
                     fullImport: match[0].trim(),
@@ -64,35 +57,38 @@ export async function extractImportsFromJavaFile(
     }
 }
 
-export function getLibraryAndImportedEntities(
-    importStatement: string,
+export function getLibraryAndImportedEntity(
+    importPath: string,
     isStatic: boolean,
     isWildcard: boolean,
     packageToJarMap?: Map<string, ImportToJarMapping>,
 ): { library: string; importedEntity: string } {
-    // // Find the correct packageToJarMap by checking which root has a matching package
-    if (packageToJarMap) {
-        for (const [key, importDetails] of packageToJarMap.entries()) {
-            if (importStatement.startsWith(key)) {
-                return {
-                    library: importDetails.jar,
-                    importedEntity: importDetails.entity,
-                };
-            }
-        }
+    const importDetails = packageToJarMap?.get(importPath);
+    if (importDetails) {
+        return {
+            library: importDetails.jar,
+            importedEntity: importDetails.entity,
+        };
     }
 
-    // Fallback logic for when packageToJarMap is not provided
+    return fallbackForNotFindingJarMatch(importPath, isWildcard, isStatic);
+}
+
+/*
+ * This logic is not perfect as it can't find the actual jar, it's more like a guess based on the import statement that can point in the right direction.
+ */
+function fallbackForNotFindingJarMatch(
+    importPath: string,
+    isWildcard: boolean,
+    isStatic: boolean,
+) {
     if (isWildcard) {
         // Handle wildcard imports (e.g., `static org.junit.jupiter.api.Assertions.*`)
-        const lastDotIndex = importStatement.lastIndexOf('.');
-        const library =
-            isStatic && lastDotIndex !== -1
-                ? importStatement.slice(0, lastDotIndex) // Everything before `Assertions`
-                : importStatement.slice(0, lastDotIndex); // For regular wildcard imports
+        const lastDotIndex = importPath.lastIndexOf('.');
+        const library = importPath.slice(0, lastDotIndex);
 
         const importedEntity = isStatic
-            ? importStatement.slice(lastDotIndex + 1) + '.*' // Append `.*` for static wildcard imports
+            ? importPath.slice(lastDotIndex + 1) + '.*' // `Assertions.*`
             : '*'; // Regular wildcard
 
         return { library, importedEntity };
@@ -100,7 +96,7 @@ export function getLibraryAndImportedEntities(
 
     if (isStatic) {
         // Handle specific static imports (e.g., `org.mockito.Mockito.when`)
-        const parts = importStatement.split('.');
+        const parts = importPath.split('.');
         if (parts.length > 2) {
             const library = parts.slice(0, -2).join('.'); // Everything before the last two segments
             const importedEntity = parts.slice(-2).join('.'); // The last two segments (`Mockito.when`)
@@ -109,16 +105,16 @@ export function getLibraryAndImportedEntities(
     }
 
     // Handle regular imports (e.g., `org.springframework.stereotype.Service`)
-    const lastDotIndex = importStatement.lastIndexOf('.');
+    const lastDotIndex = importPath.lastIndexOf('.');
     if (lastDotIndex !== -1) {
         return {
-            library: importStatement.slice(0, lastDotIndex),
-            importedEntity: importStatement.slice(lastDotIndex + 1),
+            library: importPath.slice(0, lastDotIndex),
+            importedEntity: importPath.slice(lastDotIndex + 1),
         };
     }
 
-    // Fallback for unexpected cases
-    return { library: '', importedEntity: importStatement };
+    // Unexpected cases
+    return { library: '', importedEntity: importPath };
 }
 
 interface ImportToJarMapping {
@@ -160,7 +156,6 @@ export async function generatePackageToJarMaps(
                 `cd '${projectPath}' && jdeps --multi-release 17 -verbose:class -cp "${classpath}" target/${jarFileName}`,
                 { encoding: 'utf-8' },
             ).trim();
-            // console.log(jdepsOutput);
         } catch (error) {
             console.error(
                 `Failed to process dependencies for ${projectPath}`,
@@ -201,7 +196,7 @@ export async function generatePackageToJarMaps(
 
         projectImportToJarMap.set(projectPath, importToJarMap);
     }
-    console.log(projectImportToJarMap);
+    // console.log(projectImportToJarMap);
     return projectImportToJarMap;
 }
 
@@ -298,9 +293,9 @@ export function findProjectPath(
 
 function isLocalJavaImport(
     importPath: string,
-    localPrefixes: string[],
+    repoGroupIds: string[],
 ): boolean {
-    return localPrefixes.some((prefix) => importPath.startsWith(prefix));
+    return repoGroupIds.some((prefix) => importPath.startsWith(prefix));
 }
 
 export const javaExtensions = ['.java'];
