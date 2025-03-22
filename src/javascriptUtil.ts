@@ -11,8 +11,7 @@ export async function extractImportsFromJavascriptTypescriptFile(
     try {
         const relativePath = removeRepoPath(repoPath, filePath);
         const extension = filePath.slice(filePath.lastIndexOf('.'));
-        // Read file content
-        const code = await fs.readFile(filePath, 'utf8');
+        const code = fs.readFileSync(filePath, 'utf8');
 
         // Parse the content
         const ast = babelParser.parse(code, {
@@ -29,9 +28,9 @@ export async function extractImportsFromJavascriptTypescriptFile(
 
         const importStatements: ImportStatement[] = [];
         traverse(ast, {
-            // Check for import statements commonly used in E6+ modules
-            // import something from 'some-library';
-            // import { somethingElse } from 'another-library';
+            // Check for import statements commonly used in E6+ modules like:
+            // - import something from 'some-library';
+            // - import { somethingElse } from 'another-library';
             ImportDeclaration({ node }) {
                 if (
                     node.source &&
@@ -91,8 +90,8 @@ export async function extractImportsFromJavascriptTypescriptFile(
                     });
                 }
             },
-            // Check for require statements commonly used in CommonJS modules
-            //const something = require('some-library');
+            // Check for require statements commonly used in CommonJS modules like:
+            // - const something = require('some-library');
             CallExpression({ node }) {
                 if (
                     node.callee?.type === 'Identifier' &&
@@ -117,8 +116,8 @@ export async function extractImportsFromJavascriptTypescriptFile(
                     });
                 }
             },
-            // This handles dynamic import() calls, often used for code-splitting
-            // const something = await import('some-library');
+            // This handles dynamic import() calls, often used for code-splitting:
+            // - const something = await import('some-library');
             ImportExpression({ node }) {
                 if (
                     node.source &&
@@ -145,7 +144,6 @@ export async function extractImportsFromJavascriptTypescriptFile(
 
         return importStatements;
     } catch (error) {
-        // Log error with the file name
         console.error(`Failed to process file: ${filePath}`);
         if (error instanceof Error) {
             console.error(`Error: ${error.message}`);
