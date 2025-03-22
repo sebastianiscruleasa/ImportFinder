@@ -6,13 +6,13 @@ import {
 } from './javascriptUtil';
 import {
     extractGroupIdsFromPoms,
-    extractImportsFromJavastackFile,
+    extractImportsFromJavaFile,
     findProjectPath,
     findRootPomXmlPaths,
     generatePackageToJarMaps,
-    javastackExtensions,
-    javastackIgnoreList,
-} from './javastackUtil';
+    javaExtensions,
+    javaIgnoreList,
+} from './javaUtil';
 import { ImportStatement } from './types';
 
 //TODO: handle javascript absolut imports
@@ -21,8 +21,8 @@ async function extractImportsFromRepo(
     repoPath: string,
 ): Promise<ImportStatement[]> {
     console.time('extractImportsFromRepo');
-    const extensions = [...javascriptExtensions, ...javastackExtensions];
-    const ignoreList = [...javascriptIgnoreList, ...javastackIgnoreList];
+    const extensions = [...javascriptExtensions, ...javaExtensions];
+    const ignoreList = [...javascriptIgnoreList, ...javaIgnoreList];
 
     const files = await getAllFiles(repoPath, extensions, ignoreList); // Recursively get all matching files
     const importStatements: ImportStatement[] = [];
@@ -41,13 +41,13 @@ async function extractImportsFromRepo(
                     repoPath,
                 );
             importStatements.push(...javascriptTypescriptImports);
-        } else if (javastackExtensions.includes(fileExtension)) {
+        } else if (javaExtensions.includes(fileExtension)) {
             const projectPath = findProjectPath(
                 file,
                 Array.from(rootToPackageToJarMap.keys()),
             );
 
-            const javastackImports = await extractImportsFromJavastackFile(
+            const javaImports = await extractImportsFromJavaFile(
                 file,
                 repoPath,
                 groupIds,
@@ -55,7 +55,7 @@ async function extractImportsFromRepo(
                     ? rootToPackageToJarMap.get(projectPath)
                     : undefined,
             );
-            importStatements.push(...javastackImports);
+            importStatements.push(...javaImports);
         } else {
             console.log(`Skipping unsupported file type: ${fileExtension}`);
         }

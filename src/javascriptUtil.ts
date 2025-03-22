@@ -4,20 +4,6 @@ import traverse from '@babel/traverse';
 import { getLanguageByExtension, removeRepoPath } from './util';
 import { ImportStatement } from './types';
 
-/**
- * Determine if an import path is local
- * @param importPath The import path to check
- * @returns True if the import path is local, false otherwise
- */
-export function isLocalImportJavascript(importPath: string): boolean {
-    // Returns true for local imports, false for external imports
-    return (
-        importPath.startsWith('./') ||
-        importPath.startsWith('../') ||
-        importPath.startsWith('/')
-    );
-}
-
 export async function extractImportsFromJavascriptTypescriptFile(
     filePath: string,
     repoPath: string,
@@ -50,7 +36,7 @@ export async function extractImportsFromJavascriptTypescriptFile(
                 if (
                     node.source &&
                     node.source.type === 'StringLiteral' &&
-                    !isLocalImportJavascript(node.source.value)
+                    !isLocalJavascriptImport(node.source.value)
                 ) {
                     const library = node.source.value;
                     const fullImport =
@@ -113,7 +99,7 @@ export async function extractImportsFromJavascriptTypescriptFile(
                     node.callee.name === 'require' &&
                     node.arguments?.length > 0 &&
                     node.arguments[0].type === 'StringLiteral' &&
-                    !isLocalImportJavascript(node.arguments[0].value)
+                    !isLocalJavascriptImport(node.arguments[0].value)
                 ) {
                     const library = node.arguments[0].value;
                     const fullImport =
@@ -137,7 +123,7 @@ export async function extractImportsFromJavascriptTypescriptFile(
                 if (
                     node.source &&
                     node.source.type === 'StringLiteral' &&
-                    !isLocalImportJavascript(node.source.value)
+                    !isLocalJavascriptImport(node.source.value)
                 ) {
                     const library = node.source.value;
                     const fullImport =
@@ -168,6 +154,14 @@ export async function extractImportsFromJavascriptTypescriptFile(
         }
         return [];
     }
+}
+
+function isLocalJavascriptImport(importPath: string): boolean {
+    return (
+        importPath.startsWith('./') ||
+        importPath.startsWith('../') ||
+        importPath.startsWith('/')
+    );
 }
 
 export const javascriptExtensions = ['.js', '.ts', '.jsx', '.tsx'];

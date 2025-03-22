@@ -4,7 +4,7 @@ import { ImportStatement } from './types';
 import { getLanguageByExtension, removeRepoPath } from './util';
 import { execSync } from 'child_process';
 
-export async function extractImportsFromJavastackFile(
+export async function extractImportsFromJavaFile(
     filePath: string,
     repoPath: string,
     groupIds: string[],
@@ -27,7 +27,7 @@ export async function extractImportsFromJavastackFile(
         while ((match = importRegex.exec(code)) !== null) {
             const importStatement = match[2];
 
-            if (!isLocalJavastackImport(importStatement, groupIds)) {
+            if (!isLocalJavaImport(importStatement, groupIds)) {
                 const isStatic = match[1] !== undefined;
                 const isWildcard = match[3] !== undefined;
                 const alias = match[4];
@@ -279,14 +279,6 @@ export async function extractGroupIdsFromPoms(
     return Array.from(groupIds);
 }
 
-// Function to determine if an import is local
-function isLocalJavastackImport(
-    importPath: string,
-    localPrefixes: string[],
-): boolean {
-    return localPrefixes.some((prefix) => importPath.startsWith(prefix));
-}
-
 export function findProjectPath(
     filePath: string,
     projectPaths: string[],
@@ -304,9 +296,16 @@ export function findProjectPath(
     return bestMatch; // Can be null if no match is found, then we will use some fallback logic
 }
 
-export const javastackExtensions = ['.java', '.kt', '.groovy', '.scala'];
+function isLocalJavaImport(
+    importPath: string,
+    localPrefixes: string[],
+): boolean {
+    return localPrefixes.some((prefix) => importPath.startsWith(prefix));
+}
 
-export const javastackIgnoreList = [
+export const javaExtensions = ['.java'];
+
+export const javaIgnoreList = [
     // Build and output directories
     'target', // Maven
     'build', // Gradle
