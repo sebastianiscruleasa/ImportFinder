@@ -1,7 +1,7 @@
 import * as fs from 'fs/promises';
 import path from 'path';
 import { ImportStatement } from './types';
-import { getLanguageByExtension, removeRepoPath } from './util';
+import { getLanguageByExtension, getRelativePathToRepo } from './util';
 import { execSync } from 'child_process';
 
 export async function extractImportsFromJavaFile(
@@ -11,14 +11,14 @@ export async function extractImportsFromJavaFile(
     importedClassToJarMap?: Map<string, ImportedClassMetadata>,
 ): Promise<ImportStatement[]> {
     try {
-        const relativePath = removeRepoPath(repoPath, filePath);
+        const relativePath = getRelativePathToRepo(repoPath, filePath);
         const extension = filePath.slice(filePath.lastIndexOf('.'));
-        const code = await fs.readFile(filePath, 'utf8');
+        const fileContent = await fs.readFile(filePath, 'utf8');
 
         const importStatements: ImportStatement[] = [];
         const importRegex = /^\s*import\s+(static\s+)?([\w.]+)(\.\*)?;\s*$/gm;
         let match;
-        while ((match = importRegex.exec(code))) {
+        while ((match = importRegex.exec(fileContent))) {
             const importedClass = match[2];
 
             if (!isLocalJavaImport(importedClass, groupIds)) {

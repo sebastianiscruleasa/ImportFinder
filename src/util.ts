@@ -2,7 +2,10 @@ import * as fs from 'fs/promises';
 import path from 'path';
 import { ImportStatement } from './types';
 
-export function removeRepoPath(repoPath: string, filePath: string): string {
+export function getRelativePathToRepo(
+    repoPath: string,
+    filePath: string,
+): string {
     if (filePath.startsWith(repoPath)) {
         return filePath.replace(repoPath, '').replace(/^\//, ''); // Remove repoPath and leading slash
     }

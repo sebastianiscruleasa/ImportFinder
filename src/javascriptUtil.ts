@@ -1,7 +1,7 @@
 import * as fs from 'fs/promises';
 import * as babelParser from '@babel/parser';
 import traverse from '@babel/traverse';
-import { getLanguageByExtension, removeRepoPath } from './util';
+import { getLanguageByExtension, getRelativePathToRepo } from './util';
 import { ImportStatement } from './types';
 
 export async function extractImportsFromJavascriptTypescriptFile(
@@ -9,12 +9,12 @@ export async function extractImportsFromJavascriptTypescriptFile(
     repoPath: string,
 ): Promise<ImportStatement[]> {
     try {
-        const relativePath = removeRepoPath(repoPath, filePath);
+        const relativePath = getRelativePathToRepo(repoPath, filePath);
         const extension = filePath.slice(filePath.lastIndexOf('.'));
-        const code = await fs.readFile(filePath, 'utf8');
+        const fileContent = await fs.readFile(filePath, 'utf8');
 
         // Parse the content
-        const ast = babelParser.parse(code, {
+        const ast = babelParser.parse(fileContent, {
             sourceType: 'module',
             plugins: [
                 'jsx', // Handles JSX syntax
@@ -41,7 +41,7 @@ export async function extractImportsFromJavascriptTypescriptFile(
                     const fullImport =
                         typeof node.start === 'number' &&
                         typeof node.end === 'number'
-                            ? code.slice(node.start, node.end)
+                            ? fileContent.slice(node.start, node.end)
                             : `import ... from '${library}'`;
                     const importedEntities = node.specifiers
                         .map((specifier) => {
@@ -104,7 +104,7 @@ export async function extractImportsFromJavascriptTypescriptFile(
                     const fullImport =
                         typeof node.start === 'number' &&
                         typeof node.end === 'number'
-                            ? code.slice(node.start, node.end)
+                            ? fileContent.slice(node.start, node.end)
                             : `const ... = require('${library}');`;
                     importStatements.push({
                         file: relativePath,
@@ -128,7 +128,7 @@ export async function extractImportsFromJavascriptTypescriptFile(
                     const fullImport =
                         typeof node.start === 'number' &&
                         typeof node.end === 'number'
-                            ? code.slice(node.start, node.end)
+                            ? fileContent.slice(node.start, node.end)
                             : `import('${library}');`;
                     importStatements.push({
                         file: relativePath,
