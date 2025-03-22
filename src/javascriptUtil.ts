@@ -1,11 +1,7 @@
 import * as fs from 'fs-extra';
 import * as babelParser from '@babel/parser';
 import traverse from '@babel/traverse';
-import {
-    getLanguageByExtension,
-    isStringLiteral,
-    removeRepoPath,
-} from './util';
+import { getLanguageByExtension, removeRepoPath } from './util';
 import { ImportStatement } from './types';
 
 /**
@@ -53,7 +49,7 @@ export async function extractImportsFromJavascriptTypescriptFile(
             ImportDeclaration({ node }) {
                 if (
                     node.source &&
-                    isStringLiteral(node.source) &&
+                    node.source.type === 'StringLiteral' &&
                     !isLocalImportJavascript(node.source.value)
                 ) {
                     const library = node.source.value;
@@ -116,7 +112,7 @@ export async function extractImportsFromJavascriptTypescriptFile(
                     node.callee?.type === 'Identifier' &&
                     node.callee.name === 'require' &&
                     node.arguments?.length > 0 &&
-                    isStringLiteral(node.arguments[0]) &&
+                    node.arguments[0].type === 'StringLiteral' &&
                     !isLocalImportJavascript(node.arguments[0].value)
                 ) {
                     const library = node.arguments[0].value;
@@ -140,7 +136,7 @@ export async function extractImportsFromJavascriptTypescriptFile(
             ImportExpression({ node }) {
                 if (
                     node.source &&
-                    isStringLiteral(node.source) &&
+                    node.source.type === 'StringLiteral' &&
                     !isLocalImportJavascript(node.source.value)
                 ) {
                     const library = node.source.value;

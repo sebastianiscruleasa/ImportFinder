@@ -1,11 +1,6 @@
-import { Node } from '@babel/types';
 import * as fs from 'fs-extra';
 import path from 'path';
 import { ImportStatement } from './types';
-
-export function isStringLiteral(node: Node) {
-    return node.type === 'StringLiteral';
-}
 
 export function removeRepoPath(repoPath: string, filePath: string): string {
     if (filePath.startsWith(repoPath)) {
@@ -25,7 +20,6 @@ export async function getAllFiles(
     for (const file of files) {
         const fullPath = path.join(dirPath, file);
 
-        // Check if the file or folder is in the ignore list
         if (ignoreList.some((ignore) => file.includes(ignore))) {
             continue; // Skip ignored files or directories
         }
@@ -41,7 +35,6 @@ export async function getAllFiles(
             );
             allFiles.push(...nestedFiles);
         } else if (extensions.some((ext) => file.endsWith(ext))) {
-            // If it's a file with the desired extension, add it
             allFiles.push(fullPath);
         }
     }
@@ -72,12 +65,10 @@ export async function saveImportsToCsvFile(
     data: ImportStatement[],
     filePath: string,
 ): Promise<void> {
-    // Extract headers from object keys
     const headers = Object.keys(data[0]);
 
-    // Create the CSV content
     const csvContent = [
-        headers.join(','), // Add headers row
+        headers.join(','),
         ...data.map(
             (row) =>
                 headers
@@ -98,7 +89,6 @@ export async function saveImportsToCsvFile(
         ),
     ].join('\n');
 
-    // Write the CSV content to file
     try {
         await fs.writeFile(filePath, csvContent, 'utf8');
     } catch (error) {
@@ -109,10 +99,6 @@ export async function saveImportsToCsvFile(
 export function getLanguageByExtension(extension: string): string {
     const extensionToLanguage: Record<string, string> = {
         '.java': 'Java',
-        '.kt': 'Kotlin',
-        '.kts': 'Kotlin',
-        '.groovy': 'Groovy',
-        '.scala': 'Scala',
         '.js': 'JavaScript',
         '.ts': 'TypeScript',
         '.jsx': 'JavaScript (JSX)',
