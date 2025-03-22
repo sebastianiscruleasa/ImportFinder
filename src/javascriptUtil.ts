@@ -83,7 +83,7 @@ export async function extractImportsFromJavascriptTypescriptFile(
                             .filter(Boolean)
                             .map((entity) => entity!.name)
                             .join(', '), // Concatenate all valid imported entities
-                        modifiers: modifiers.length > 0 ? modifiers : [],
+                        modifiers: modifiers,
                         language: getLanguageByExtension(extension),
                         library: library,
                         fullImport: fullImport,
