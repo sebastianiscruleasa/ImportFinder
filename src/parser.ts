@@ -9,7 +9,7 @@ import {
     extractImportsFromJavaFile,
     findProjectPath,
     findRootPomXmlPaths,
-    generatePackageToJarMaps,
+    generateImportedClassToJarMaps,
     javaExtensions,
     javaIgnoreList,
 } from './javaUtil';
@@ -28,9 +28,9 @@ async function extractImportsFromRepo(
     const importStatements: ImportStatement[] = [];
 
     const rootPomXmlPaths = await findRootPomXmlPaths(repoPath);
-    const [groupIds, rootToPackageToJarMap] = await Promise.all([
+    const [groupIds, importedClassToJarMaps] = await Promise.all([
         findGroupIds(rootPomXmlPaths),
-        generatePackageToJarMaps(rootPomXmlPaths),
+        generateImportedClassToJarMaps(rootPomXmlPaths),
     ]);
 
     for (const file of files) {
@@ -45,7 +45,7 @@ async function extractImportsFromRepo(
         } else if (javaExtensions.includes(fileExtension)) {
             const projectPath = findProjectPath(
                 file,
-                Array.from(rootToPackageToJarMap.keys()),
+                Array.from(importedClassToJarMaps.keys()),
             );
 
             const javaImports = await extractImportsFromJavaFile(
@@ -53,7 +53,7 @@ async function extractImportsFromRepo(
                 repoPath,
                 groupIds,
                 projectPath
-                    ? rootToPackageToJarMap.get(projectPath)
+                    ? importedClassToJarMaps.get(projectPath)
                     : undefined,
             );
             importStatements.push(...javaImports);

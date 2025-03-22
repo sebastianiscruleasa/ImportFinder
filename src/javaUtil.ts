@@ -8,7 +8,7 @@ export async function extractImportsFromJavaFile(
     filePath: string,
     repoPath: string,
     groupIds: string[],
-    packageToJarMap?: Map<string, ImportToJarMapping>,
+    importedClassToJarMap?: Map<string, ImportedClassMetadata>,
 ): Promise<ImportStatement[]> {
     try {
         const relativePath = removeRepoPath(repoPath, filePath);
@@ -19,17 +19,17 @@ export async function extractImportsFromJavaFile(
         const importRegex = /^\s*import\s+(static\s+)?([\w.]+)(\.\*)?;\s*$/gm;
         let match;
         while ((match = importRegex.exec(code))) {
-            const importPath = match[2];
+            const importedClass = match[2];
 
-            if (!isLocalJavaImport(importPath, groupIds)) {
+            if (!isLocalJavaImport(importedClass, groupIds)) {
                 const isStatic = match[1] !== undefined;
                 const isWildcard = match[3] !== undefined;
                 const alias = match[4];
                 const { library, importedEntity } = getLibraryAndImportedEntity(
-                    importPath,
+                    importedClass,
                     isStatic,
                     isWildcard,
-                    packageToJarMap,
+                    importedClassToJarMap,
                 );
 
                 importStatements.push({
@@ -58,12 +58,12 @@ export async function extractImportsFromJavaFile(
 }
 
 export function getLibraryAndImportedEntity(
-    importPath: string,
+    importedClass: string,
     isStatic: boolean,
     isWildcard: boolean,
-    packageToJarMap?: Map<string, ImportToJarMapping>,
+    packageToJarMap?: Map<string, ImportedClassMetadata>,
 ): { library: string; importedEntity: string } {
-    const importDetails = packageToJarMap?.get(importPath);
+    const importDetails = packageToJarMap?.get(importedClass);
     if (importDetails) {
         return {
             library: importDetails.jar,
@@ -71,24 +71,24 @@ export function getLibraryAndImportedEntity(
         };
     }
 
-    return fallbackForNotFindingJarMatch(importPath, isWildcard, isStatic);
+    return fallbackForNotFindingJarMatch(importedClass, isWildcard, isStatic);
 }
 
 /*
  * This logic is not perfect as it can't find the actual jar, it's more like a guess based on the import statement that can point in the right direction.
  */
 function fallbackForNotFindingJarMatch(
-    importPath: string,
+    importedClass: string,
     isWildcard: boolean,
     isStatic: boolean,
 ) {
     if (isWildcard) {
         // Handle wildcard imports (e.g., `static org.junit.jupiter.api.Assertions.*`)
-        const lastDotIndex = importPath.lastIndexOf('.');
-        const library = importPath.slice(0, lastDotIndex);
+        const lastDotIndex = importedClass.lastIndexOf('.');
+        const library = importedClass.slice(0, lastDotIndex);
 
         const importedEntity = isStatic
-            ? importPath.slice(lastDotIndex + 1) + '.*' // `Assertions.*`
+            ? importedClass.slice(lastDotIndex + 1) + '.*' // `Assertions.*`
             : '*'; // Regular wildcard
 
         return { library, importedEntity };
@@ -96,7 +96,7 @@ function fallbackForNotFindingJarMatch(
 
     if (isStatic) {
         // Handle specific static imports (e.g., `org.mockito.Mockito.when`)
-        const parts = importPath.split('.');
+        const parts = importedClass.split('.');
         if (parts.length > 2) {
             const library = parts.slice(0, -2).join('.'); // Everything before the last two segments
             const importedEntity = parts.slice(-2).join('.'); // The last two segments (`Mockito.when`)
@@ -105,16 +105,16 @@ function fallbackForNotFindingJarMatch(
     }
 
     // Handle regular imports (e.g., `org.springframework.stereotype.Service`)
-    const lastDotIndex = importPath.lastIndexOf('.');
+    const lastDotIndex = importedClass.lastIndexOf('.');
     if (lastDotIndex !== -1) {
         return {
-            library: importPath.slice(0, lastDotIndex),
-            importedEntity: importPath.slice(lastDotIndex + 1),
+            library: importedClass.slice(0, lastDotIndex),
+            importedEntity: importedClass.slice(lastDotIndex + 1),
         };
     }
 
     // Unexpected cases
-    return { library: '', importedEntity: importPath };
+    return { library: '', importedEntity: importedClass };
 }
 
 export async function findRootPomXmlPaths(repoPath: string): Promise<string[]> {
@@ -167,24 +167,42 @@ export async function findGroupIds(pomXmlPaths: string[]): Promise<string[]> {
     return Array.from(groupIds);
 }
 
-interface ImportToJarMapping {
+type ImportedClassMetadataMapByProject = Map<
+    string, // project path
+    Map<string, ImportedClassMetadata> // ImportedClass ➝ ImportedClassMetadata
+>;
+
+type ImportedClassMetadata = {
     jar: string;
     entity: string;
-}
+};
 
-export async function generatePackageToJarMaps(
+/**
+ * Analyzes a set of Maven-based Java projects and generates a mapping of all external class dependencies
+ * (imported classes) to the JAR files they originate from.
+ *
+ * For each provided `pom.xml` path, the method:
+ * 1. Identifies the built JAR file in the corresponding `target/` directory.
+ * 2. Executes the `jdeps` tool to extract class-level dependencies for that project.
+ * 3. Filters out self-references (dependencies to classes from the same JAR).
+ * 4. Builds a mapping from each imported class (fully qualified name) to its originating JAR and entity name.
+ *
+ * Returns a map where each key is a project path, and its value is another map from imported class names
+ * to their corresponding JAR and class name (entity).
+ */
+export async function generateImportedClassToJarMaps(
     pomPaths: string[],
-): Promise<Map<string, Map<string, ImportToJarMapping>>> {
-    const projectImportToJarMap = new Map<
+): Promise<ImportedClassMetadataMapByProject> {
+    const importedClassToJarMapsByProject = new Map<
         string,
-        Map<string, ImportToJarMapping>
+        Map<string, ImportedClassMetadata>
     >();
 
     for (const pomPath of pomPaths) {
-        const projectPath = path.dirname(pomPath); // Get project root directory
-        const jarFileName = await findBuiltJarName(projectPath); // Find the JAR filename
+        const projectPath = path.dirname(pomPath);
+        const projectJar = await findProjectJar(projectPath);
 
-        if (!jarFileName) {
+        if (!projectJar) {
             console.warn(
                 `No JAR found in target for ${projectPath}, skipping...`,
             );
@@ -195,15 +213,13 @@ export async function generatePackageToJarMaps(
         try {
             console.info(`Processing ${projectPath}...`);
 
-            // Get the classpath from Maven
             const classpath = execSync(
                 `cd '${projectPath}' && mvn dependency:build-classpath`,
                 { encoding: 'utf-8' },
             ).trim();
 
-            // Run jdeps to analyze dependencies
             jdepsOutput = execSync(
-                `cd '${projectPath}' && jdeps --multi-release 17 -verbose:class -cp "${classpath}" target/${jarFileName}`,
+                `cd '${projectPath}' && jdeps --multi-release 17 -verbose:class -cp "${classpath}" target/${projectJar}`,
                 { encoding: 'utf-8' },
             ).trim();
         } catch (error) {
@@ -214,44 +230,35 @@ export async function generatePackageToJarMaps(
             continue;
         }
 
-        // Parse jdeps output
         console.info(`Parsing jdeps output for ${projectPath}...`);
-        const importToJarMap = new Map<string, ImportToJarMapping>();
+        const importedClassToJarMap = new Map<string, ImportedClassMetadata>();
         const lines = jdepsOutput.trim().split('\n');
 
         for (const line of lines) {
-            // const match = line.match(/\S+ -> (\S+)\s+(\S+\.jar)/);
-            // const match = line.match(/\S+ -> (\S+)\s+(\S+)/);
+            // const regex = /\S+ -> (\S+)\s+(\S+\.jar)/;
             const regex = /\S+ -> (\S+)\s+(\S+)/;
-            // const regex = /^\s*(\S+)\s*->\s*(\S+)\s*(\S+)$/;
-            // const regex = /^\s*(\S+)\s*->\s*(\S+(?:\.\S+)*?)\s+(\S+(\.jar)?)$/;
 
             const match = line.match(regex);
             if (match) {
-                const [, fullImport, jarFile] = match;
-                if (jarFile === jarFileName) {
-                    // Skip self-references
+                const [, importedClass, importedJar] = match;
+                if (importedJar === projectJar) {
+                    // Skip self-references as we are interested only in the external dependencies
                     continue;
                 }
-                const parts = fullImport.split('.');
-                const entity = parts.pop() || '';
-                const packageName = parts.join('.');
+                const importedEntity = importedClass.split('.').at(-1) || '';
 
-                importToJarMap.set(fullImport, {
-                    jar: jarFile.replace(/\.jar$/, ''),
-                    entity,
+                importedClassToJarMap.set(importedClass, {
+                    jar: importedJar.replace(/\.jar$/, ''),
+                    entity: importedEntity,
                 });
             }
         }
-
-        projectImportToJarMap.set(projectPath, importToJarMap);
+        importedClassToJarMapsByProject.set(projectPath, importedClassToJarMap);
     }
-    // console.log(projectImportToJarMap);
-    return projectImportToJarMap;
+    return importedClassToJarMapsByProject;
 }
 
-// Helper function to find the built JAR in the target directory
-async function findBuiltJarName(projectPath: string): Promise<string | null> {
+async function findProjectJar(projectPath: string): Promise<string | null> {
     try {
         const files = execSync(`ls '${projectPath}/target'`, {
             encoding: 'utf-8',
@@ -286,14 +293,14 @@ export function findProjectPath(
         }
     }
 
-    return bestMatch; // Can be null if no match is found, then we will use some fallback logic
+    return bestMatch;
 }
 
 function isLocalJavaImport(
-    importPath: string,
+    importedClass: string,
     repoGroupIds: string[],
 ): boolean {
-    return repoGroupIds.some((prefix) => importPath.startsWith(prefix));
+    return repoGroupIds.some((prefix) => importedClass.startsWith(prefix));
 }
 
 export const javaExtensions = ['.java'];
