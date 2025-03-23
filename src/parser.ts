@@ -2,7 +2,6 @@ import { getAllFiles, saveImportsToJsonFile } from './util';
 import {
     extractImportsFromJavascriptTypescriptFile,
     javascriptExtensions,
-    javascriptIgnoreList,
 } from './javascriptUtil';
 import {
     findGroupIds,
@@ -11,7 +10,6 @@ import {
     findRootPomXmlPaths,
     generateImportedClassToJarMaps,
     javaExtensions,
-    javaIgnoreList,
 } from './javaUtil';
 import { ImportStatement } from './types';
 
@@ -19,10 +17,8 @@ async function extractImportsFromRepo(
     repoPath: string,
 ): Promise<ImportStatement[]> {
     console.time('extractImportsFromRepo');
-    const extensions = [...javascriptExtensions, ...javaExtensions];
-    const ignoreList = [...javascriptIgnoreList, ...javaIgnoreList];
 
-    const files = await getAllFiles(repoPath, extensions, ignoreList);
+    const files = await getAllFiles(repoPath);
     const importStatements: ImportStatement[] = [];
 
     const rootPomXmlPaths = await findRootPomXmlPaths(repoPath);

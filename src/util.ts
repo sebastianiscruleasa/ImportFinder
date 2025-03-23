@@ -1,6 +1,8 @@
 import * as fs from 'fs/promises';
 import path from 'path';
 import { ImportStatement } from './types';
+import { javascriptExtensions, javascriptIgnoreList } from './javascriptUtil';
+import { javaExtensions, javaIgnoreList } from './javaUtil';
 
 export function getRelativePathToRepo(
     repoPath: string,
@@ -12,12 +14,10 @@ export function getRelativePathToRepo(
     return filePath; // If the filePath doesn't start with repoPath, return as is
 }
 
-export async function getAllFiles(
-    dirPath: string,
-    extensions: string[],
-    ignoreList: string[],
-): Promise<string[]> {
+export async function getAllFiles(dirPath: string): Promise<string[]> {
     const files = await fs.readdir(dirPath);
+    const extensions = [...javascriptExtensions, ...javaExtensions];
+    const ignoreList = [...javascriptIgnoreList, ...javaIgnoreList];
     const allFiles: string[] = [];
 
     for (const file of files) {
@@ -31,11 +31,7 @@ export async function getAllFiles(
 
         if (stat.isDirectory()) {
             // If it's a directory, recursively get files
-            const nestedFiles = await getAllFiles(
-                fullPath,
-                extensions,
-                ignoreList,
-            );
+            const nestedFiles = await getAllFiles(fullPath);
             allFiles.push(...nestedFiles);
         } else if (extensions.some((ext) => file.endsWith(ext))) {
             allFiles.push(fullPath);
