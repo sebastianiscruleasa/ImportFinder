@@ -219,7 +219,7 @@ export async function generateImportedClassToJarMaps(
             ).trim();
 
             jdepsOutput = execSync(
-                `cd '${projectPath}' && jdeps --multi-release 17 -verbose:class -cp "${classpath}" target/${projectJar}`,
+                `cd '${projectPath}' && jdeps --multi-release 17 -verbose:class -cp "${classpath}" "target/${projectJar}"`,
                 { encoding: 'utf-8' },
             ).trim();
         } catch (error) {
@@ -235,12 +235,12 @@ export async function generateImportedClassToJarMaps(
         const lines = jdepsOutput.trim().split('\n');
 
         for (const line of lines) {
-            // const regex = /\S+ -> (\S+)\s+(\S+\.jar)/;
-            const regex = /\S+ -> (\S+)\s+(\S+)/;
-
+            const regex = /^\s*(\S+)\s*->\s*(\S+)\s+(\S+?)(?:\.jar)?\s*$/;
             const match = line.match(regex);
             if (match) {
-                const [, importedClass, importedJar] = match;
+                const sourceClass = match[1];
+                const importedClass = match[2];
+                const importedJar = match[3];
                 if (importedJar === projectJar) {
                     // Skip self-references as we are interested only in the external dependencies
                     continue;
@@ -253,6 +253,7 @@ export async function generateImportedClassToJarMaps(
                 });
             }
         }
+        console.log(importedClassToJarMap);
         importedClassToJarMapsByProject.set(projectPath, importedClassToJarMap);
     }
     return importedClassToJarMapsByProject;
