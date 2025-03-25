@@ -20,7 +20,10 @@ export async function createJavaExtractor(
     return {
         isIgnored: (file: string) =>
             isIgnored(file, javaExcludedDirectories, javaExcludedFilePatterns),
-        async extractImports(filePath: string): Promise<ImportStatement[]> {
+        async extractImports(
+            filePath: string,
+            repoPath: string,
+        ): Promise<ImportStatement[]> {
             const projectPath = findProjectPath(
                 filePath,
                 Array.from(importedClassToJarMaps.keys()),
