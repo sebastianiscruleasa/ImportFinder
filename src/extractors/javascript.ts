@@ -82,7 +82,7 @@ async function extractImportsFromJavascriptTypescriptFile(
                             if (specifier.type === 'ImportNamespaceSpecifier') {
                                 return {
                                     name: `* as ${specifier.local.name}`,
-                                    modifier: 'wildcard',
+                                    modifier: 'wildcard, alias',
                                 }; // Namespace imports
                             }
                         })
