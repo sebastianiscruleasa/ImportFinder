@@ -104,12 +104,34 @@ function getLibraryAndImportedEntity(
     isWildcard: boolean,
     packageToJarMap?: Map<string, ImportedClassMetadata>,
 ): { library: string; importedEntity: string } {
-    const importDetails = packageToJarMap?.get(importedClass);
-    if (importDetails) {
-        return {
-            library: importDetails.jar,
-            importedEntity: importDetails.entity,
-        };
+    if (!packageToJarMap) {
+        return fallbackForNotFindingJarMatch(
+            importedClass,
+            isWildcard,
+            isStatic,
+        );
+    }
+
+    if (!isWildcard) {
+        const importDetails = packageToJarMap.get(importedClass);
+        if (importDetails) {
+            return {
+                library: importDetails.jar,
+                importedEntity: importDetails.entity,
+            };
+        }
+    } else {
+        const match = Array.from(packageToJarMap.entries()).find(([key]) =>
+            key.startsWith(importedClass + '.'),
+        );
+
+        if (match) {
+            const [, importDetails] = match;
+            return {
+                library: importDetails.jar,
+                importedEntity: '*',
+            };
+        }
     }
 
     return fallbackForNotFindingJarMatch(importedClass, isWildcard, isStatic);
