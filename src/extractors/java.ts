@@ -1,12 +1,12 @@
 import * as fs from 'fs/promises';
 import path from 'path';
 import { ImportStatement, LanguageExtractor } from '../types';
+import { execSync } from 'child_process';
 import {
     getLanguageByExtension,
     getRelativePathToRepo,
     isIgnored,
-} from '../util';
-import { execSync } from 'child_process';
+} from './extractors.util';
 
 export async function createJavaExtractor(
     repoPath: string,

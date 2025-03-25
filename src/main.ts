@@ -1,6 +1,6 @@
 import { saveImportsToJsonFile } from './util';
 import { ImportStatement } from './types';
-import { groupFilesByExtractor } from './extractors/extractorManager';
+import { groupFilesByExtractor } from './extractors/extractorDispatcher';
 
 async function extractImports(repoPath: string): Promise<ImportStatement[]> {
     console.time('extractImports');

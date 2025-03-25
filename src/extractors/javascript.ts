@@ -1,12 +1,12 @@
 import * as fs from 'fs/promises';
 import * as babelParser from '@babel/parser';
 import traverse from '@babel/traverse';
+import { ImportStatement, LanguageExtractor } from '../types';
 import {
     getLanguageByExtension,
     getRelativePathToRepo,
     isIgnored,
-} from '../util';
-import { ImportStatement, LanguageExtractor } from '../types';
+} from './extractors.util';
 
 export function createJavascriptExtractor(): LanguageExtractor {
     return {
