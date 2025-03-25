@@ -10,18 +10,6 @@ export function getRelativePathToRepo(
     return filePath; // If the filePath doesn't start with repoPath, return as is
 }
 
-export function getLanguageByExtension(extension: string): string {
-    const extensionToLanguage: Record<string, string> = {
-        '.java': 'Java',
-        '.js': 'JavaScript',
-        '.ts': 'TypeScript',
-        '.jsx': 'JavaScript (JSX)',
-        '.tsx': 'TypeScript (TSX)',
-    };
-
-    return extensionToLanguage[extension] || 'Unknown';
-}
-
 export function isIgnored(
     file: string,
     excludedDirectories: string[],
@@ -39,3 +27,15 @@ export function isIgnored(
 
     return isInExcludedDir || isExcludedFile;
 }
+
+export function getLanguageByExtension(extension: string): string {
+    return extensionToLanguage[extension] || 'Unknown';
+}
+
+const extensionToLanguage: Record<string, string> = {
+    '.java': 'Java',
+    '.js': 'JavaScript',
+    '.ts': 'TypeScript',
+    '.jsx': 'JavaScript (JSX)',
+    '.tsx': 'TypeScript (TSX)',
+};
