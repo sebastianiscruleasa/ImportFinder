@@ -16,11 +16,11 @@ export function createJavascriptExtractor(): LanguageExtractor {
                 javascriptExcludedDirectories,
                 javascriptExcludedFilePatterns,
             ),
-        extractImports: extractImportsFromJavascriptTypescriptFile,
+        extractImports,
     };
 }
 
-async function extractImportsFromJavascriptTypescriptFile(
+async function extractImports(
     filePath: string,
     repoPath: string,
 ): Promise<ImportStatement[]> {

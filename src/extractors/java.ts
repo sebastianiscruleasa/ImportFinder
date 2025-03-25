@@ -29,7 +29,7 @@ export async function createJavaExtractor(
                 Array.from(importedClassToJarMaps.keys()),
             );
 
-            return await extractImportsFromJavaFile(
+            return await extractImports(
                 filePath,
                 repoPath,
                 groupIds,
@@ -41,7 +41,7 @@ export async function createJavaExtractor(
     };
 }
 
-async function extractImportsFromJavaFile(
+async function extractImports(
     filePath: string,
     repoPath: string,
     groupIds: string[],
@@ -68,6 +68,10 @@ async function extractImportsFromJavaFile(
                     isWildcard,
                     importedClassToJarMap,
                 );
+
+                if (isJdkModule(library)) {
+                    continue;
+                }
 
                 importStatements.push({
                     file: relativePath,
@@ -353,6 +357,14 @@ function isLocalJavaImport(
     repoGroupIds: string[],
 ): boolean {
     return repoGroupIds.some((prefix) => importedClass.startsWith(prefix));
+}
+
+export function isJdkModule(moduleName: string): boolean {
+    return (
+        moduleName.startsWith('java.') ||
+        moduleName.startsWith('jdk.') ||
+        moduleName.startsWith('javax.')
+    );
 }
 
 export const javaExtensions = ['.java'];
