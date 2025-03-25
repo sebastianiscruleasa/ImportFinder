@@ -184,24 +184,33 @@ async function findRootPomXmlPaths(repoPath: string): Promise<string[]> {
 }
 
 async function findGroupIds(pomXmlPaths: string[]): Promise<string[]> {
-    const groupIdRegex = /<groupId>([\w.]+)<\/groupId>/;
-    const groupIds: Set<string> = new Set();
+    const groupIds = new Set<string>();
 
     for (const pomPath of pomXmlPaths) {
-        try {
-            const pomContent = await fs.readFile(pomPath, 'utf8');
-            const match = pomContent.match(groupIdRegex);
-            if (match) {
-                groupIds.add(match[1]);
-            } else {
-                console.warn(`No <groupId> found in ${pomPath}`);
-            }
-        } catch (error) {
-            console.error(`Error reading ${pomPath}:`, error);
+        const groupId = await findGroupId(pomPath);
+        if (groupId) {
+            groupIds.add(groupId);
         }
     }
 
     return Array.from(groupIds);
+}
+
+const groupIdRegex = /<groupId>([\w.]+)<\/groupId>/;
+
+async function findGroupId(pomPath: string): Promise<string | null> {
+    try {
+        const pomContent = await fs.readFile(pomPath, 'utf8');
+        const match = pomContent.match(groupIdRegex);
+        if (match) {
+            return match[1];
+        } else {
+            console.warn(`No <groupId> found in ${pomPath}`);
+        }
+    } catch (error) {
+        console.error(`Error reading ${pomPath}:`, error);
+    }
+    return null;
 }
 
 type ImportedClassMetadataMapByProject = Map<
@@ -237,7 +246,10 @@ async function generateImportedClassToJarMaps(
 
     for (const pomPath of pomPaths) {
         const projectPath = path.dirname(pomPath);
-        const projectJar = await findProjectJar(projectPath);
+        const [groupId, projectJar] = await Promise.all([
+            await findGroupId(pomPath),
+            await findProjectJar(projectPath),
+        ]);
 
         if (!projectJar) {
             console.warn(
@@ -278,8 +290,11 @@ async function generateImportedClassToJarMaps(
                 const sourceClass = match[1];
                 const importedClass = match[2];
                 const importedJar = match[3];
-                if (importedJar === projectJar) {
-                    // Skip self-references as we are interested only in the external dependencies
+                if (
+                    importedJar === projectJar ||
+                    (groupId && !sourceClass.startsWith(groupId))
+                ) {
+                    // Skip self-references (same JAR) and classes that are not part of the current project.
                     continue;
                 }
                 const importedEntity = importedClass.split('.').at(-1) || '';
