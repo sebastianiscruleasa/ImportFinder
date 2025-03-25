@@ -1,10 +1,26 @@
 import * as fs from 'fs/promises';
 import * as babelParser from '@babel/parser';
 import traverse from '@babel/traverse';
-import { getLanguageByExtension, getRelativePathToRepo } from './util';
-import { ImportStatement } from './types';
+import {
+    getLanguageByExtension,
+    getRelativePathToRepo,
+    isIgnored,
+} from '../util';
+import { ImportStatement, LanguageExtractor } from '../types';
 
-export async function extractImportsFromJavascriptTypescriptFile(
+export function createJavascriptExtractor(): LanguageExtractor {
+    return {
+        isIgnored: (file: string) =>
+            isIgnored(
+                file,
+                javascriptExcludedDirectories,
+                javascriptExcludedFilePatterns,
+            ),
+        extractImports: extractImportsFromJavascriptTypescriptFile,
+    };
+}
+
+async function extractImportsFromJavascriptTypescriptFile(
     filePath: string,
     repoPath: string,
 ): Promise<ImportStatement[]> {
@@ -164,35 +180,36 @@ function isLocalJavascriptImport(importPath: string): boolean {
 
 export const javascriptExtensions = ['.js', '.ts', '.jsx', '.tsx'];
 
-export const javascriptIgnoreList = [
-    // folders
-    'node_modules',
-    'dist',
-    'build',
-    'out',
-    'target',
-    'coverage',
-    '.nyc_output',
-    '.git',
-    '.cache',
-    '.next',
+const javascriptExcludedDirectories = [
     '.nuxt',
-    'public',
-    'static',
-    'assets',
-    //files
-    '*.min.js',
-    '*.d.ts',
+    '.svelte-kit',
+    '.storybook',
+    '.vercel',
+    '.firebase',
+    'storybook-static',
+    '.cache',
+    '.output',
+    '.vite',
+    '.angular',
+    '.astro',
+];
+
+const javascriptExcludedFilePatterns = [
     '*.test.js',
     '*.test.ts',
+    '*.test.jsx',
+    '*.test.tsx',
     '*.spec.js',
     '*.spec.ts',
-    '*.tmp',
-    '*.bak',
+    '*.spec.jsx',
+    '*.spec.tsx',
+    '*.d.ts',
+    '*.min.js',
     'webpack.config.js',
     'babel.config.js',
     'tsconfig.json',
     '.eslintrc.js',
+    '.eslintrc.cjs',
     '.prettierrc.js',
     'jest.config.js',
 ];

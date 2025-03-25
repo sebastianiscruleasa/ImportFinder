@@ -1,10 +1,44 @@
 import * as fs from 'fs/promises';
 import path from 'path';
-import { ImportStatement } from './types';
-import { getLanguageByExtension, getRelativePathToRepo } from './util';
+import { ImportStatement, LanguageExtractor } from '../types';
+import {
+    getLanguageByExtension,
+    getRelativePathToRepo,
+    isIgnored,
+} from '../util';
 import { execSync } from 'child_process';
 
-export async function extractImportsFromJavaFile(
+export async function createJavaExtractor(
+    repoPath: string,
+): Promise<LanguageExtractor> {
+    const rootPomXmlPaths = await findRootPomXmlPaths(repoPath);
+    const [groupIds, importedClassToJarMaps] = await Promise.all([
+        findGroupIds(rootPomXmlPaths),
+        generateImportedClassToJarMaps(rootPomXmlPaths),
+    ]);
+
+    return {
+        isIgnored: (file: string) =>
+            isIgnored(file, javaExcludedDirectories, javaExcludedFilePatterns),
+        async extractImports(filePath: string): Promise<ImportStatement[]> {
+            const projectPath = findProjectPath(
+                filePath,
+                Array.from(importedClassToJarMaps.keys()),
+            );
+
+            return await extractImportsFromJavaFile(
+                filePath,
+                repoPath,
+                groupIds,
+                projectPath
+                    ? importedClassToJarMaps.get(projectPath)
+                    : undefined,
+            );
+        },
+    };
+}
+
+async function extractImportsFromJavaFile(
     filePath: string,
     repoPath: string,
     groupIds: string[],
@@ -57,7 +91,7 @@ export async function extractImportsFromJavaFile(
     }
 }
 
-export function getLibraryAndImportedEntity(
+function getLibraryAndImportedEntity(
     importedClass: string,
     isStatic: boolean,
     isWildcard: boolean,
@@ -117,7 +151,7 @@ function fallbackForNotFindingJarMatch(
     return { library: '', importedEntity: importedClass };
 }
 
-export async function findRootPomXmlPaths(repoPath: string): Promise<string[]> {
+async function findRootPomXmlPaths(repoPath: string): Promise<string[]> {
     const queue: string[] = [repoPath];
     const pomPaths: Set<string> = new Set();
     const visitedRoots: Set<string> = new Set();
@@ -146,7 +180,7 @@ export async function findRootPomXmlPaths(repoPath: string): Promise<string[]> {
     return Array.from(pomPaths);
 }
 
-export async function findGroupIds(pomXmlPaths: string[]): Promise<string[]> {
+async function findGroupIds(pomXmlPaths: string[]): Promise<string[]> {
     const groupIdRegex = /<groupId>([\w.]+)<\/groupId>/;
     const groupIds: Set<string> = new Set();
 
@@ -190,7 +224,7 @@ type ImportedClassMetadata = {
  * Returns a map where each key is a project path, and its value is another map from imported class names
  * to their corresponding JAR and class name (entity).
  */
-export async function generateImportedClassToJarMaps(
+async function generateImportedClassToJarMaps(
     pomPaths: string[],
 ): Promise<ImportedClassMetadataMapByProject> {
     const importedClassToJarMapsByProject = new Map<
@@ -253,7 +287,6 @@ export async function generateImportedClassToJarMaps(
                 });
             }
         }
-        console.log(importedClassToJarMap);
         importedClassToJarMapsByProject.set(projectPath, importedClassToJarMap);
     }
     return importedClassToJarMapsByProject;
@@ -280,7 +313,7 @@ async function findProjectJar(projectPath: string): Promise<string | null> {
     }
 }
 
-export function findProjectPath(
+function findProjectPath(
     filePath: string,
     projectPaths: string[],
 ): string | null {
@@ -306,77 +339,22 @@ function isLocalJavaImport(
 
 export const javaExtensions = ['.java'];
 
-export const javaIgnoreList = [
-    // Build and output directories
-    'target', // Maven
-    'build', // Gradle
-    'out', // IntelliJ/Eclipse
+const javaExcludedDirectories = ['.gradle', '.mvn'];
 
-    // IDE metadata and configurations
-    '.classpath',
-    '.project', // Eclipse
-    '.idea', // IntelliJ IDEA
-    '.vscode', // VS Code
-    '.settings', // Eclipse
-
-    // Version control metadata
-    '.git',
-    '.svn',
-
-    // Test files and directories
-    'src/test', // Common test directory for all languages
-    '*.test.java',
-    '*.test.kt',
-    '*.test.scala',
-    '*.test.groovy',
-    '*.spec.java',
-    '*.spec.kt',
-    '*.spec.scala',
-    '*.spec.groovy',
-    'jacoco', // Code coverage
-    '.nyc_output', // Code coverage
-
-    // Binary files and libraries
-    '*.class', // Compiled Java/Kotlin/Scala/Groovy files
-    '*.jar', // Java archives
-    '*.war', // Web application archives
-    '*.ear', // Enterprise application archives
-    '*.kts', // Kotlin scripts
-
-    // Logs and temporary files
-    '*.log',
-    '*.tmp',
-    '*.bak',
-    '*.swp',
-
-    // Documentation and resources
-    'docs',
-    '*.md',
-    '*.png',
-    '*.jpg',
-    '*.svg',
-    '*.sql',
-
-    // Libraries and dependencies
-    'lib',
-    'libs',
-    'node_modules',
-    '*.zip',
-    '*.tar.gz',
-
-    // Gradle and Maven specific files
+const javaExcludedFilePatterns = [
     '*.iml', // IntelliJ IDEA module files
-    'build.gradle',
-    'build.gradle.kts', // Gradle build scripts
-    'settings.gradle',
-    'settings.gradle.kts', // Gradle settings
-    'pom.xml', // Maven build configuration
-    '*.ivy',
-    '*.ivy.xml', // Ivy build files
-    '*.sbt', // SBT build files (Scala)
 
-    // Scala and Groovy specific
-    '.metals', // Scala Metals IDE files
-    '.bloop', // Scala build tools
-    'groovyc', // Groovy compiled outputs
+    // Build tools
+    'build.gradle',
+    'build.gradle.kts',
+    'settings.gradle',
+    'settings.gradle.kts',
+    'pom.xml',
+    '*.ivy',
+    '*.ivy.xml',
+
+    // Test files (if you're parsing only .java)
+    '*Test.java',
+    '*.test.java',
+    '*.spec.java',
 ];

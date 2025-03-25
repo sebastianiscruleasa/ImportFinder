@@ -1,8 +1,6 @@
 import * as fs from 'fs/promises';
 import path from 'path';
 import { ImportStatement } from './types';
-import { javascriptExtensions, javascriptIgnoreList } from './javascriptUtil';
-import { javaExtensions, javaIgnoreList } from './javaUtil';
 
 export function getRelativePathToRepo(
     repoPath: string,
@@ -14,31 +12,33 @@ export function getRelativePathToRepo(
     return filePath; // If the filePath doesn't start with repoPath, return as is
 }
 
-export async function getAllFiles(dirPath: string): Promise<string[]> {
-    const files = await fs.readdir(dirPath);
-    const extensions = [...javascriptExtensions, ...javaExtensions];
-    const ignoreList = [...javascriptIgnoreList, ...javaIgnoreList];
-    const allFiles: string[] = [];
+export async function groupFilesByExtension(
+    dirPath: string,
+): Promise<Map<string, string[]>> {
+    const groupedFiles = new Map<string, string[]>();
 
-    for (const file of files) {
-        const fullPath = path.join(dirPath, file);
+    async function walk(currentPath: string) {
+        const entries = await fs.readdir(currentPath, { withFileTypes: true });
 
-        if (ignoreList.some((ignore) => file.includes(ignore))) {
-            continue; // Skip ignored files or directories
-        }
+        for (const entry of entries) {
+            const fullPath = path.join(currentPath, entry.name);
 
-        const stat = await fs.stat(fullPath);
+            if (isGloballyIgnored(fullPath)) continue;
 
-        if (stat.isDirectory()) {
-            // If it's a directory, recursively get files
-            const nestedFiles = await getAllFiles(fullPath);
-            allFiles.push(...nestedFiles);
-        } else if (extensions.some((ext) => file.endsWith(ext))) {
-            allFiles.push(fullPath);
+            if (entry.isDirectory()) {
+                await walk(fullPath);
+            } else {
+                const ext = path.extname(entry.name);
+                if (!groupedFiles.has(ext)) {
+                    groupedFiles.set(ext, []);
+                }
+                groupedFiles.get(ext)!.push(fullPath);
+            }
         }
     }
 
-    return allFiles;
+    await walk(dirPath);
+    return groupedFiles;
 }
 
 export async function saveImportsToJsonFile(
@@ -77,7 +77,7 @@ export async function saveImportsToCsvFile(
                             // Join arrays with a delimiter
                             return value.join(' '); // For modifiers: "static wildcard"
                         }
-                        const stringValue = String(value || '');
+                        const stringValue = String(value ?? '');
                         // Escape fields with commas, quotes, or newlines
                         if (/[,"\n]/.test(stringValue)) {
                             return `"${stringValue.replace(/"/g, '""')}"`;
@@ -106,3 +106,102 @@ export function getLanguageByExtension(extension: string): string {
 
     return extensionToLanguage[extension] || 'Unknown';
 }
+
+export function isGloballyIgnored(file: string): boolean {
+    return isIgnored(
+        file,
+        globallyExcludedDirectories,
+        globallyExcludedFilePatterns,
+    );
+}
+
+export function isIgnored(
+    file: string,
+    excludedDirectories: string[],
+    excludedFilePatterns: string[],
+): boolean {
+    const pathParts = file.split(path.sep);
+    const fileName = path.basename(file);
+
+    const isInExcludedDir = pathParts.some((dir) =>
+        excludedDirectories.includes(dir),
+    );
+    const isExcludedFile = excludedFilePatterns.some((pattern) =>
+        fileName.endsWith(pattern),
+    );
+
+    return isInExcludedDir || isExcludedFile;
+}
+
+const globallyExcludedDirectories: string[] = [
+    // Build/output
+    'target',
+    'build',
+    'out',
+    'dist',
+
+    // IDE/project config
+    '.idea',
+    '.vscode',
+    '.settings',
+    '.classpath',
+    '.project',
+
+    // Test directories (language-specific test files should be filtered later)
+    'src/test',
+    '__tests__',
+    '__mocks__',
+
+    // Coverage and meta
+    'jacoco',
+    '.nyc_output',
+    'coverage',
+
+    // Dependencies
+    'node_modules',
+    'lib',
+    'libs',
+
+    // Docs/static
+    'docs',
+    '.next',
+    '.turbo',
+    '.parcel-cache',
+    '.nx',
+    'storybook-static',
+
+    // Python/virtual envs
+    'venv',
+    '__pycache__',
+];
+
+const globallyExcludedFilePatterns: string[] = [
+    // VCS
+    '.git',
+    '.svn',
+    '.hg',
+
+    // Binary and compiled artifacts
+    '*.class',
+    '*.jar',
+    '*.war',
+    '*.ear',
+    '*.zip',
+    '*.tar.gz',
+    '*.kts',
+
+    // Logs, backups, tmp
+    '*.log',
+    '*.tmp',
+    '*.bak',
+    '*.swp',
+
+    // Docs/media
+    '*.md',
+    '*.png',
+    '*.jpg',
+    '*.jpeg',
+    '*.gif',
+    '*.svg',
+    '*.sql',
+];
