@@ -51,7 +51,8 @@ async function extractImports(
                 if (
                     node.source &&
                     node.source.type === 'StringLiteral' &&
-                    !isLocalJavascriptImport(node.source.value)
+                    !isLocalJavascriptImport(node.source.value) &&
+                    !isNodeModule(node.source.value)
                 ) {
                     const library = node.source.value;
                     const fullImport =
@@ -114,7 +115,8 @@ async function extractImports(
                     node.callee.name === 'require' &&
                     node.arguments?.length > 0 &&
                     node.arguments[0].type === 'StringLiteral' &&
-                    !isLocalJavascriptImport(node.arguments[0].value)
+                    !isLocalJavascriptImport(node.arguments[0].value) &&
+                    !isNodeModule(node.arguments[0].value)
                 ) {
                     const library = node.arguments[0].value;
                     const fullImport =
@@ -138,7 +140,8 @@ async function extractImports(
                 if (
                     node.source &&
                     node.source.type === 'StringLiteral' &&
-                    !isLocalJavascriptImport(node.source.value)
+                    !isLocalJavascriptImport(node.source.value) &&
+                    !isNodeModule(node.source.value)
                 ) {
                     const library = node.source.value;
                     const fullImport =
@@ -177,6 +180,58 @@ function isLocalJavascriptImport(importPath: string): boolean {
         importPath.startsWith('/')
     );
 }
+
+export function isNodeModule(importPath: string): boolean {
+    // Strip 'node:' prefix if present (ESM style)
+    const normalized = importPath.startsWith('node:')
+        ? importPath.slice(5)
+        : importPath;
+
+    return nodeModules.has(normalized);
+}
+
+const nodeModules = new Set([
+    'assert',
+    'async_hooks',
+    'buffer',
+    'child_process',
+    'cluster',
+    'console',
+    'constants',
+    'crypto',
+    'dgram',
+    'dns',
+    'domain',
+    'events',
+    'fs',
+    'fs/promises',
+    'http',
+    'http2',
+    'https',
+    'inspector',
+    'module',
+    'net',
+    'os',
+    'path',
+    'perf_hooks',
+    'process',
+    'punycode',
+    'querystring',
+    'readline',
+    'repl',
+    'stream',
+    'string_decoder',
+    'timers',
+    'tls',
+    'trace_events',
+    'tty',
+    'url',
+    'util',
+    'v8',
+    'vm',
+    'worker_threads',
+    'zlib',
+]);
 
 export const javascriptExtensions = ['.js', '.ts', '.jsx', '.tsx'];
 
