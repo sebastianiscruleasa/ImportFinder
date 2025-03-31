@@ -224,8 +224,14 @@ const groupIdRegex = /<groupId>([\w.]+)<\/groupId>/;
 async function findGroupId(pomPath: string): Promise<string | null> {
     try {
         const pomContent = await fs.readFile(pomPath, 'utf8');
-        const match = pomContent.match(groupIdRegex);
-        if (match) {
+
+        // Remove the <parent>...</parent> block to avoid matching parent groupId like org.springframework.boot
+        const cleaned = pomContent.replace(/<parent>[\s\S]*?<\/parent>/, '');
+
+        // Now match the first groupId (which should be the actual project groupId)
+        const match = cleaned.match(groupIdRegex);
+
+        if (match && match[1]) {
             return match[1];
         } else {
             console.warn(`No <groupId> found in ${pomPath}`);
@@ -290,10 +296,16 @@ async function generateImportedClassToJarMaps(
                 { encoding: 'utf-8' },
             ).trim();
 
-            jdepsOutput = execSync(
-                `cd '${projectPath}' && jdeps --multi-release 17 -verbose:class -cp "${classpath}" "target/${projectJar}"`,
-                { encoding: 'utf-8' },
-            ).trim();
+            // multi-release was introduced in Java 9
+            const javaVersion = getJavaMajorVersion();
+            const jdepsCommand = [
+                `cd '${projectPath}'`,
+                javaVersion >= 9
+                    ? `jdeps --multi-release ${javaVersion} -verbose:class -cp "${classpath}" "target/${projectJar}"`
+                    : `jdeps -verbose:class -cp "${classpath}" "target/${projectJar}"`,
+            ].join(' && ');
+
+            jdepsOutput = execSync(jdepsCommand, { encoding: 'utf-8' }).trim();
         } catch (error) {
             console.error(
                 `Failed to process dependencies for ${projectPath}`,
@@ -331,6 +343,20 @@ async function generateImportedClassToJarMaps(
         importedClassToJarMapsByProject.set(projectPath, importedClassToJarMap);
     }
     return importedClassToJarMapsByProject;
+}
+
+export function getJavaMajorVersion(): number {
+    // 'java -version' writes to stderr, not stdout
+    const versionOutput = execSync('java -version 2>&1', { encoding: 'utf-8' });
+
+    const match = versionOutput.match(/version "(\d+)(?:\.\d+)?(?:\.\d+)?"/);
+
+    if (!match || !match[1]) {
+        throw new Error(
+            `Unable to parse Java version from output:\n${versionOutput}`,
+        );
+    }
+    return parseInt(match[1], 10);
 }
 
 async function findProjectJar(projectPath: string): Promise<string | null> {
