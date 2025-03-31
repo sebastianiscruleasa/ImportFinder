@@ -16,20 +16,30 @@ export async function groupFilesByExtractor(
 
     // JavaScript / TypeScript
     if (extensions.some((ext) => javascriptExtensions.includes(ext))) {
+        // jsconfig and tsconfig are relevant for the creation of the extractor
+        const allJsonFiles = groupedFilesByExtensions.get('.json') ?? [];
+        const jsOrTsConfigs = allJsonFiles.filter(
+            (file) =>
+                file.endsWith('tsconfig.json') ||
+                file.endsWith('jsconfig.json'),
+        );
+
+        const jsExtractor = await createJavascriptExtractor(jsOrTsConfigs);
+
         const files = javascriptExtensions.flatMap(
             (ext) => groupedFilesByExtensions.get(ext) ?? [],
         );
-        const jsExtractor = createJavascriptExtractor();
         extractorToFilesMap.set(jsExtractor, files);
         javascriptExtensions.forEach((ext) => handledExtensions.add(ext));
     }
 
     // Java
     if (extensions.some((ext) => javaExtensions.includes(ext))) {
+        const javaExtractor = await createJavaExtractor(repoPath);
+
         const files = javaExtensions.flatMap(
             (ext) => groupedFilesByExtensions.get(ext) ?? [],
         );
-        const javaExtractor = await createJavaExtractor(repoPath);
         extractorToFilesMap.set(javaExtractor, files);
         javaExtensions.forEach((ext) => handledExtensions.add(ext));
     }

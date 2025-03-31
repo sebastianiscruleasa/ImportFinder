@@ -8,7 +8,12 @@ import {
     isIgnored,
 } from './extractors.util';
 
-export function createJavascriptExtractor(): LanguageExtractor {
+export async function createJavascriptExtractor(
+    jsOrTsConfigs: string[],
+): Promise<LanguageExtractor> {
+    const localAbsoluteImportPrefixes =
+        await extractLocalAbsoluteImportPrefixes(jsOrTsConfigs);
+
     return {
         isIgnored: (file: string) =>
             isIgnored(
@@ -16,13 +21,20 @@ export function createJavascriptExtractor(): LanguageExtractor {
                 javascriptExcludedDirectories,
                 javascriptExcludedFilePatterns,
             ),
-        extractImports,
+        async extractImports(filePath: string, repoPath: string) {
+            return await extractImports(
+                filePath,
+                repoPath,
+                localAbsoluteImportPrefixes,
+            );
+        },
     };
 }
 
 async function extractImports(
     filePath: string,
     repoPath: string,
+    localAbsoluteImportPrefixes: Set<string>,
 ): Promise<ImportStatement[]> {
     try {
         const relativePath = getRelativePathToRepo(repoPath, filePath);
@@ -51,7 +63,10 @@ async function extractImports(
                 if (
                     node.source &&
                     node.source.type === 'StringLiteral' &&
-                    !isLocalJavascriptImport(node.source.value) &&
+                    !isLocalImport(
+                        node.source.value,
+                        localAbsoluteImportPrefixes,
+                    ) &&
                     !isNodeModule(node.source.value)
                 ) {
                     const library = node.source.value;
@@ -115,7 +130,10 @@ async function extractImports(
                     node.callee.name === 'require' &&
                     node.arguments?.length > 0 &&
                     node.arguments[0].type === 'StringLiteral' &&
-                    !isLocalJavascriptImport(node.arguments[0].value) &&
+                    !isLocalImport(
+                        node.arguments[0].value,
+                        localAbsoluteImportPrefixes,
+                    ) &&
                     !isNodeModule(node.arguments[0].value)
                 ) {
                     const library = node.arguments[0].value;
@@ -140,7 +158,10 @@ async function extractImports(
                 if (
                     node.source &&
                     node.source.type === 'StringLiteral' &&
-                    !isLocalJavascriptImport(node.source.value) &&
+                    !isLocalImport(
+                        node.source.value,
+                        localAbsoluteImportPrefixes,
+                    ) &&
                     !isNodeModule(node.source.value)
                 ) {
                     const library = node.source.value;
@@ -173,12 +194,68 @@ async function extractImports(
     }
 }
 
-function isLocalJavascriptImport(importPath: string): boolean {
+interface TsConfig {
+    compilerOptions?: {
+        baseUrl?: string;
+        paths?: Record<string, string[]>;
+    };
+}
+
+async function extractLocalAbsoluteImportPrefixes(
+    configPaths: string[],
+): Promise<Set<string>> {
+    const allPrefixes: Set<string> = new Set();
+
+    for (const configPath of configPaths) {
+        try {
+            const raw = await fs.readFile(configPath, 'utf8');
+            const parsed: TsConfig = JSON.parse(raw);
+            const baseUrl = parsed.compilerOptions?.baseUrl;
+            const paths = parsed.compilerOptions?.paths;
+
+            if (paths) {
+                for (const key of Object.keys(paths)) {
+                    const cleaned = key.replace(/\/\*$/, '');
+                    allPrefixes.add(cleaned);
+                }
+            } else if (baseUrl) {
+                const relativeBase = baseUrl
+                    .replace(/^\.\/?/, '')
+                    .replace(/\/$/, '');
+                if (relativeBase.length > 0) {
+                    allPrefixes.add(relativeBase);
+                }
+            }
+        } catch (err) {
+            console.error(`Failed to parse js/tsconfig: ${configPath}`, err);
+        }
+    }
+
+    return allPrefixes;
+}
+
+function isLocalImport(
+    importPath: string,
+    localAbsoluteImportPrefixes: Set<string>,
+): boolean {
     return (
         importPath.startsWith('./') ||
         importPath.startsWith('../') ||
-        importPath.startsWith('/')
+        importPath.startsWith('/') ||
+        isLocalAbsoluteImport(importPath, localAbsoluteImportPrefixes)
     );
+}
+
+function isLocalAbsoluteImport(
+    importPath: string,
+    localAbsoluteImportPrefixes: Set<string>,
+): boolean {
+    for (const prefix of localAbsoluteImportPrefixes) {
+        if (importPath === prefix || importPath.startsWith(`${prefix}/`)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 export function isNodeModule(importPath: string): boolean {

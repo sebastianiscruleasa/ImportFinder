@@ -20,10 +20,7 @@ export async function createJavaExtractor(
     return {
         isIgnored: (file: string) =>
             isIgnored(file, javaExcludedDirectories, javaExcludedFilePatterns),
-        async extractImports(
-            filePath: string,
-            repoPath: string,
-        ): Promise<ImportStatement[]> {
+        async extractImports(filePath: string, repoPath: string) {
             const projectPath = findProjectPath(
                 filePath,
                 Array.from(importedClassToJarMaps.keys()),
@@ -58,7 +55,7 @@ async function extractImports(
         while ((match = importRegex.exec(fileContent))) {
             const importedClass = match[2];
 
-            if (!isLocalJavaImport(importedClass, groupIds)) {
+            if (!isLocalImport(importedClass, groupIds)) {
                 const isStatic = match[1] !== undefined;
                 const isWildcard = match[3] !== undefined;
                 const alias = match[4];
@@ -374,10 +371,7 @@ function findProjectPath(
     return bestMatch;
 }
 
-function isLocalJavaImport(
-    importedClass: string,
-    repoGroupIds: string[],
-): boolean {
+function isLocalImport(importedClass: string, repoGroupIds: string[]): boolean {
     return repoGroupIds.some((prefix) => importedClass.startsWith(prefix));
 }
 
