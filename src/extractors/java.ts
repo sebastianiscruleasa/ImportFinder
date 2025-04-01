@@ -101,23 +101,14 @@ function getLibraryAndImportedEntity(
     isWildcard: boolean,
     packageToJarMap?: Map<string, ImportedClassMetadata>,
 ): { library: string; importedEntity: string } {
-    if (!packageToJarMap) {
-        return fallbackForNotFindingJarMatch(
-            importedClass,
-            isWildcard,
-            isStatic,
-        );
-    }
-
-    if (!isWildcard) {
-        const importDetails = packageToJarMap.get(importedClass);
-        if (importDetails) {
-            return {
-                library: importDetails.jar,
-                importedEntity: importDetails.entity,
-            };
-        }
-    } else {
+    const importDetails = packageToJarMap?.get(importedClass);
+    if (importDetails) {
+        return {
+            library: importDetails.jar,
+            importedEntity: !isWildcard ? importDetails.entity : '*', // org.junit.jupiter.api.Assertions.* where importedClass is actually everything before *
+        };
+    } else if (isWildcard && packageToJarMap) {
+        // jakarta.persistence.*, where the imported class from the jdeps output is more like jakarta.persistence.Embeddable
         const match = Array.from(packageToJarMap.entries()).find(([key]) =>
             key.startsWith(importedClass + '.'),
         );
@@ -287,7 +278,7 @@ async function generateImportedClassToJarMaps(
             continue;
         }
 
-        let jdepsOutput: string;
+        let jdepsCombinedOutputs: string;
         try {
             console.info(`Processing ${projectPath}...`);
 
@@ -305,7 +296,20 @@ async function generateImportedClassToJarMaps(
                     : `jdeps -verbose:class -cp "${classpath}" "target/${projectJar}"`,
             ].join(' && ');
 
-            jdepsOutput = execSync(jdepsCommand, { encoding: 'utf-8' }).trim();
+            const jdepsOutputs = execSync(jdepsCommand, {
+                encoding: 'utf-8',
+            }).trim();
+
+            const jdepsTestCommand = [
+                `cd '${projectPath}'`,
+                javaVersion >= 9
+                    ? `jdeps --multi-release ${javaVersion} -verbose:class -cp "${classpath}" "target/test-classes"`
+                    : `jdeps -verbose:class -cp "${classpath}" "target/test-classes"`,
+            ].join(' && ');
+            const jdepsTestOutput = execSync(jdepsTestCommand, {
+                encoding: 'utf-8',
+            }).trim();
+            jdepsCombinedOutputs = jdepsOutputs + '\n' + jdepsTestOutput;
         } catch (error) {
             console.error(
                 `Failed to process dependencies for ${projectPath}`,
@@ -316,7 +320,7 @@ async function generateImportedClassToJarMaps(
 
         console.info(`Parsing jdeps output for ${projectPath}...`);
         const importedClassToJarMap = new Map<string, ImportedClassMetadata>();
-        const lines = jdepsOutput.trim().split('\n');
+        const lines = jdepsCombinedOutputs.trim().split('\n');
 
         for (const line of lines) {
             const regex = /^\s*(\S+)\s*->\s*(\S+)\s+(\S+?)(?:\.jar)?\s*$/;
