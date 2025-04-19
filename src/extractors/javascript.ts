@@ -3,16 +3,38 @@ import * as babelParser from '@babel/parser';
 import traverse from '@babel/traverse';
 import { ImportStatement, LanguageExtractor } from '../types';
 import {
+    findProjectPath,
     getLanguageByExtension,
     getRelativePathToRepo,
     isIgnored,
 } from './extractors.util';
+import path from 'path';
+import {
+    buildDepTreeFromFiles,
+    parseNpmLockV2Project,
+} from 'snyk-nodejs-lockfile-parser';
 
 export async function createJavascriptExtractor(
-    jsOrTsConfigs: string[],
+    jsonFiles: string[],
 ): Promise<LanguageExtractor> {
+    const jsOrTsConfigs = jsonFiles.filter(
+        (file) =>
+            file.endsWith('tsconfig.json') || file.endsWith('jsconfig.json'),
+    );
     const localAbsoluteImportPrefixes =
         await extractLocalAbsoluteImportPrefixes(jsOrTsConfigs);
+
+    const packageJsonFiles = jsonFiles.filter((file) =>
+        file.endsWith('package.json'),
+    );
+    const packageLockJsonFiles = jsonFiles.filter((file) =>
+        file.endsWith('package-lock.json'),
+    );
+
+    const dependencyMap = await buildDependencyMap(
+        packageJsonFiles,
+        packageLockJsonFiles,
+    );
 
     return {
         isIgnored: (file: string) =>
@@ -22,10 +44,17 @@ export async function createJavascriptExtractor(
                 javascriptExcludedFilePatterns,
             ),
         async extractImports(filePath: string, repoPath: string) {
+            const projectPath = findProjectPath(
+                filePath,
+                Array.from(dependencyMap.keys()),
+            );
+
             return await extractImports(
                 filePath,
                 repoPath,
+                projectPath,
                 localAbsoluteImportPrefixes,
+                dependencyMap.get(projectPath),
             );
         },
     };
@@ -34,8 +63,16 @@ export async function createJavascriptExtractor(
 async function extractImports(
     filePath: string,
     repoPath: string,
+    projectPath: string,
     localAbsoluteImportPrefixes: Set<string>,
+    dependencyMap?: Map<string, string>,
 ): Promise<ImportStatement[]> {
+    if (!dependencyMap) {
+        throw new Error(
+            `Error finding dependency map for this project: ${projectPath}`,
+        );
+    }
+
     try {
         const relativePath = getRelativePathToRepo(repoPath, filePath);
         const extension = filePath.slice(filePath.lastIndexOf('.'));
@@ -69,7 +106,9 @@ async function extractImports(
                     ) &&
                     !isNodeModule(node.source.value)
                 ) {
-                    const library = node.source.value;
+                    const library =
+                        dependencyMap.get(node.source.value) ??
+                        fallbackResolveImport(node.source.value, dependencyMap);
                     const fullImport =
                         typeof node.start === 'number' &&
                         typeof node.end === 'number'
@@ -111,6 +150,7 @@ async function extractImports(
 
                     importStatements.push({
                         file: relativePath,
+                        projectPath: projectPath,
                         importedEntity: importedEntities
                             .filter(Boolean)
                             .map((entity) => entity!.name)
@@ -136,7 +176,12 @@ async function extractImports(
                     ) &&
                     !isNodeModule(node.arguments[0].value)
                 ) {
-                    const library = node.arguments[0].value;
+                    const library =
+                        dependencyMap.get(node.arguments[0].value) ??
+                        fallbackResolveImport(
+                            node.arguments[0].value,
+                            dependencyMap,
+                        );
                     const fullImport =
                         typeof node.start === 'number' &&
                         typeof node.end === 'number'
@@ -144,6 +189,7 @@ async function extractImports(
                             : `const ... = require('${library}');`;
                     importStatements.push({
                         file: relativePath,
+                        projectPath: projectPath,
                         importedEntity: '', // No `importedEntity` for require
                         modifiers: [], // No modifiers for require
                         language: getLanguageByExtension(extension),
@@ -164,7 +210,9 @@ async function extractImports(
                     ) &&
                     !isNodeModule(node.source.value)
                 ) {
-                    const library = node.source.value;
+                    const library =
+                        dependencyMap.get(node.source.value) ??
+                        fallbackResolveImport(node.source.value, dependencyMap);
                     const fullImport =
                         typeof node.start === 'number' &&
                         typeof node.end === 'number'
@@ -172,6 +220,7 @@ async function extractImports(
                             : `import('${library}');`;
                     importStatements.push({
                         file: relativePath,
+                        projectPath: projectPath,
                         importedEntity: '', // No `importedEntity` for dynamic imports
                         modifiers: [], // No modifiers for dynamic imports
                         language: getLanguageByExtension(extension),
@@ -232,6 +281,158 @@ async function extractLocalAbsoluteImportPrefixes(
     }
 
     return allPrefixes;
+}
+
+type DependencyMap = Map<string, Map<string, string>>;
+
+/**
+ * Builds a map of project path => { library: library@version } from valid package.json and package-lock files.
+ */
+export async function buildDependencyMap(
+    packageJsonPaths: string[],
+    packageLockJsonPaths: string[],
+): Promise<DependencyMap> {
+    const depMap: DependencyMap = new Map();
+
+    const packageGroups = groupPackageJsonAndLockFiles(
+        packageJsonPaths,
+        packageLockJsonPaths,
+    );
+
+    for (const { packageJsonPath, packageLockPath } of packageGroups) {
+        const packageLockContent = await fs.readFile(packageLockPath, 'utf8');
+        const lockFileVersion = JSON.parse(packageLockContent).lockFileVersion;
+        if (lockFileVersion === 1) {
+            // npm v1 lock files are only handled in this buildDepTreeFromFiles method, but they are considered deprecated
+            const root = path.dirname(packageJsonPath);
+            const depTree = await buildDepTreeFromFiles(
+                root,
+                'package.json',
+                'package-lock.json',
+                true,
+                false,
+            );
+
+            if (depTree.dependencies) {
+                const depEntries = new Map<string, string>();
+
+                for (const [libraryName, dep] of Object.entries(
+                    depTree.dependencies,
+                )) {
+                    const libraryVersion = dep.version;
+                    depEntries.set(
+                        libraryName,
+                        `${libraryName}@${libraryVersion}`,
+                    );
+                }
+
+                const projectDir = path.dirname(packageJsonPath);
+                depMap.set(projectDir, depEntries);
+            }
+        } else {
+            const packageJsonContent = await fs.readFile(
+                packageJsonPath,
+                'utf8',
+            );
+
+            const depGraph = await parseNpmLockV2Project(
+                packageJsonContent,
+                packageLockContent,
+                {
+                    includeDevDeps: true,
+                    strictOutOfSync: false,
+                    includeOptionalDeps: false,
+                    pruneCycles: true,
+                    includePeerDeps: false,
+                    pruneNpmStrictOutOfSync: false,
+                },
+            );
+
+            const deps = depGraph.getDepPkgs();
+            const depEntries = new Map<string, string>();
+            for (const dep of deps) {
+                depEntries.set(dep.name, `${dep.name}@${dep.version}`);
+            }
+
+            const projectDir = path.dirname(packageJsonPath);
+            depMap.set(projectDir, depEntries);
+        }
+    }
+
+    return depMap;
+}
+
+type PackageGroup = {
+    packageJsonPath: string;
+    packageLockPath: string;
+};
+
+/**
+ * Groups package.json and package-lock.json files based on their directory.
+ * Only returns pairs where both files exist in the same folder.
+ */
+function groupPackageJsonAndLockFiles(
+    packageJsonPaths: string[],
+    packageLockPaths: string[],
+): PackageGroup[] {
+    const lockMap = new Map<string, string>(); // key: directory, value: package-lock.json path
+    const grouped: PackageGroup[] = [];
+
+    // Index all package-lock.json paths by their parent directory
+    for (const lockPath of packageLockPaths) {
+        const dir = path.dirname(lockPath);
+        lockMap.set(dir, lockPath);
+    }
+
+    // Match each package.json to a lock file in the same directory
+    for (const jsonPath of packageJsonPaths) {
+        const dir = path.dirname(jsonPath);
+        const lockPath = lockMap.get(dir);
+
+        if (lockPath) {
+            grouped.push({
+                packageJsonPath: jsonPath,
+                packageLockPath: lockPath,
+            });
+        }
+    }
+
+    return grouped;
+}
+
+/**
+ * Handles import sub-paths (e.g., 'swr/immutable', 'lodash/fp') by trying to
+ * resolve them to their root package (e.g., 'swr', 'lodash') from the list of
+ * known depinder dependencies.
+ */
+function fallbackResolveImport(
+    libraryName: string,
+    dependencyMap: Map<string, string>,
+): string {
+    const importPath = libraryName;
+    const installedLibs = new Set(dependencyMap.keys());
+
+    const parts = importPath.split('/');
+    const candidates = [];
+
+    // Scoped packages (@scope/package)
+    if (importPath.startsWith('@') && parts.length >= 2) {
+        candidates.push(`${parts[0]}/${parts[1]}`);
+    }
+
+    // All shorter prefixes (e.g. lodash/fp → lodash)
+    for (let i = 1; i <= parts.length; i++) {
+        candidates.push(parts.slice(0, i).join('/'));
+    }
+
+    // Match longest valid package
+    for (const candidate of candidates.sort((a, b) => b.length - a.length)) {
+        if (installedLibs.has(candidate)) {
+            return dependencyMap.get(candidate)!;
+        }
+    }
+
+    return 'No match found in lock file'; // no match
 }
 
 function isLocalImport(

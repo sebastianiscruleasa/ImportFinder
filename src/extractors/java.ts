@@ -3,6 +3,7 @@ import path from 'path';
 import { ImportStatement, LanguageExtractor } from '../types';
 import { execSync } from 'child_process';
 import {
+    findProjectPath,
     getLanguageByExtension,
     getRelativePathToRepo,
     isIgnored,
@@ -29,10 +30,9 @@ export async function createJavaExtractor(
             return await extractImports(
                 filePath,
                 repoPath,
+                projectPath,
                 groupIds,
-                projectPath
-                    ? importedClassToJarMaps.get(projectPath)
-                    : undefined,
+                importedClassToJarMaps.get(projectPath),
             );
         },
     };
@@ -41,9 +41,16 @@ export async function createJavaExtractor(
 async function extractImports(
     filePath: string,
     repoPath: string,
+    projectPath: string,
     groupIds: string[],
     importedClassToJarMap?: Map<string, ImportedClassMetadata>,
 ): Promise<ImportStatement[]> {
+    if (!importedClassToJarMap) {
+        throw new Error(
+            `Error finding importedClassToJar map for this project: ${projectPath}`,
+        );
+    }
+
     try {
         const relativePath = getRelativePathToRepo(repoPath, filePath);
         const extension = filePath.slice(filePath.lastIndexOf('.'));
@@ -72,6 +79,7 @@ async function extractImports(
 
                 importStatements.push({
                     file: relativePath,
+                    projectPath: projectPath,
                     importedEntity: importedEntity,
                     modifiers: [
                         isStatic && 'static',
@@ -99,15 +107,15 @@ function getLibraryAndImportedEntity(
     importedClass: string,
     isStatic: boolean,
     isWildcard: boolean,
-    packageToJarMap?: Map<string, ImportedClassMetadata>,
+    packageToJarMap: Map<string, ImportedClassMetadata>,
 ): { library: string; importedEntity: string } {
-    const importDetails = packageToJarMap?.get(importedClass);
+    const importDetails = packageToJarMap.get(importedClass);
     if (importDetails) {
         return {
             library: importDetails.jar,
             importedEntity: !isWildcard ? importDetails.entity : '*', // org.junit.jupiter.api.Assertions.* where importedClass is actually everything before *
         };
-    } else if (isWildcard && packageToJarMap) {
+    } else if (isWildcard) {
         // jakarta.persistence.*, where the imported class from the jdeps output is more like jakarta.persistence.Embeddable
         const match = Array.from(packageToJarMap.entries()).find(([key]) =>
             key.startsWith(importedClass + '.'),
@@ -382,23 +390,6 @@ async function findProjectJar(projectPath: string): Promise<string | null> {
         console.error(`Failed to find JAR in ${projectPath}/target`, error);
         return null;
     }
-}
-
-function findProjectPath(
-    filePath: string,
-    projectPaths: string[],
-): string | null {
-    let bestMatch: string | null = null;
-
-    for (const projectPath of projectPaths) {
-        if (filePath.startsWith(projectPath)) {
-            if (!bestMatch || projectPath.length > bestMatch.length) {
-                bestMatch = projectPath;
-            }
-        }
-    }
-
-    return bestMatch;
 }
 
 function isLocalImport(importedClass: string, repoGroupIds: string[]): boolean {

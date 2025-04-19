@@ -39,3 +39,20 @@ const extensionToLanguage: Record<string, string> = {
     '.jsx': 'JavaScript (JSX)',
     '.tsx': 'TypeScript (TSX)',
 };
+
+export function findProjectPath(
+    filePath: string,
+    projectPaths: string[],
+): string {
+    let bestMatch: string = '';
+
+    for (const projectPath of projectPaths) {
+        if (filePath.startsWith(projectPath)) {
+            if (!bestMatch || projectPath.length > bestMatch.length) {
+                bestMatch = projectPath;
+            }
+        }
+    }
+
+    return bestMatch;
+}

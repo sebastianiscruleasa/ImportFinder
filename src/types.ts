@@ -1,5 +1,6 @@
 export interface ImportStatement {
     file: string;
+    projectPath: string;
     importedEntity: string;
     modifiers: string[];
     language: string;
