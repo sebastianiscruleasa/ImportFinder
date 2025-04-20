@@ -347,7 +347,9 @@ async function generateImportedClassToJarMaps(
                 const importedEntity = importedClass.split('.').at(-1) || '';
 
                 importedClassToJarMap.set(importedClass, {
-                    jar: importedJar.replace(/\.jar$/, ''),
+                    jar: importedJar
+                        .replace(/\.jar$/, '') // remove .jar extension
+                        .replace(/-(\d+(?:\.\d+)+.*)$/, '@$1'), // replace last dash before version with @
                     entity: importedEntity,
                 });
             }
