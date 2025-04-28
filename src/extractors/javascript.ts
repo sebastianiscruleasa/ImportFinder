@@ -11,6 +11,8 @@ import {
 import path from 'path';
 import {
     buildDepTreeFromFiles,
+    getNpmLockfileVersion,
+    NodeLockfileVersion,
     parseNpmLockV2Project,
 } from 'snyk-nodejs-lockfile-parser';
 
@@ -301,8 +303,8 @@ export async function buildDependencyMap(
 
     for (const { packageJsonPath, packageLockPath } of packageGroups) {
         const packageLockContent = await fs.readFile(packageLockPath, 'utf8');
-        const lockFileVersion = JSON.parse(packageLockContent).lockFileVersion;
-        if (lockFileVersion === 1) {
+        const lockFileVersion = getNpmLockfileVersion(packageLockContent);
+        if (lockFileVersion === NodeLockfileVersion.NpmLockV1) {
             // npm v1 lock files are only handled in this buildDepTreeFromFiles method, but they are considered deprecated
             const root = path.dirname(packageJsonPath);
             const depTree = await buildDepTreeFromFiles(

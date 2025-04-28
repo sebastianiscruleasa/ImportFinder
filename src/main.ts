@@ -35,10 +35,7 @@ async function extractImports(repoPath: string): Promise<ImportStatement[]> {
 
     try {
         const imports = await extractImports(repoPath);
-        await saveImportsToJsonFile(
-            imports,
-            './extracted-imports-meetvent.json',
-        );
+        await saveImportsToJsonFile(imports, './extracted-imports-order.json');
         // await saveImportsToCsvFile(imports, './extracted-imports.csv');
     } catch (error) {
         console.error(
