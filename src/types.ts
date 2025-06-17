@@ -15,3 +15,10 @@ export interface LanguageExtractor {
         repoPath: string,
     ) => Promise<ImportStatement[]>;
 }
+
+export interface Plugin {
+    createExtractor: (
+        groupedFilesByExtensions: Map<string, string[]>,
+    ) => Promise<LanguageExtractor>;
+    extensions: string[];
+}

@@ -1,6 +1,6 @@
 import * as fs from 'fs/promises';
 import path from 'path';
-import { ImportStatement, LanguageExtractor } from '../types';
+import { ImportStatement, LanguageExtractor, Plugin } from '../types';
 import { execSync } from 'child_process';
 import {
     findProjectPath,
@@ -9,10 +9,17 @@ import {
     isIgnored,
 } from './extractors.util';
 
-export async function createJavaExtractor(
-    repoPath: string,
+export const javaPlugin: Plugin = {
+    extensions: ['.java'],
+    createExtractor,
+};
+
+async function createExtractor(
+    groupedFilesByExtensions: Map<string, string[]>,
 ): Promise<LanguageExtractor> {
-    const rootPomXmlPaths = await findRootPomXmlPaths(repoPath);
+    const rootPomXmlPaths = findRootPomXmlPathsFromFiles(
+        groupedFilesByExtensions.get('.xml') ?? [],
+    );
     const [groupIds, importedClassToJarMaps] = await Promise.all([
         findGroupIds(rootPomXmlPaths),
         generateImportedClassToJarMaps(rootPomXmlPaths),
@@ -176,33 +183,37 @@ function fallbackForNotFindingJarMatch(
     return { library: '', importedEntity: importedClass };
 }
 
-async function findRootPomXmlPaths(repoPath: string): Promise<string[]> {
-    const queue: string[] = [repoPath];
-    const pomPaths: Set<string> = new Set();
-    const visitedRoots: Set<string> = new Set();
+function findRootPomXmlPathsFromFiles(xmlFilePaths: string[]): string[] {
+    const pomFiles = xmlFilePaths
+        .map((p) => path.normalize(p))
+        .filter((p) => path.basename(p) === 'pom.xml');
 
-    while (queue.length > 0) {
-        const currentDir = queue.shift()!;
-        const entries = await fs.readdir(currentDir, { withFileTypes: true });
+    const pomDirs = new Set(pomFiles.map((p) => path.dirname(p)));
 
-        for (const entry of entries) {
-            const fullPath = path.join(currentDir, entry.name);
+    const rootPomFiles: string[] = [];
 
-            if (entry.isFile() && entry.name === 'pom.xml') {
-                const rootDir = path.dirname(fullPath);
+    for (const pomFile of pomFiles) {
+        let currentDir = path.dirname(pomFile);
+        let isRoot = true;
 
-                // Avoid processing submodules by ensuring we only collect one pom.xml per root directory
-                if (!visitedRoots.has(rootDir)) {
-                    visitedRoots.add(rootDir);
-                    pomPaths.add(fullPath);
-                }
-            } else if (entry.isDirectory()) {
-                queue.push(fullPath);
+        while (true) {
+            const parentDir = path.dirname(currentDir);
+            if (parentDir === currentDir) {
+                break; // Reached filesystem root
             }
+            if (pomDirs.has(parentDir)) {
+                isRoot = false;
+                break;
+            }
+            currentDir = parentDir;
+        }
+
+        if (isRoot) {
+            rootPomFiles.push(pomFile);
         }
     }
 
-    return Array.from(pomPaths);
+    return rootPomFiles;
 }
 
 async function findGroupIds(pomXmlPaths: string[]): Promise<string[]> {
@@ -405,8 +416,6 @@ export function isJdkModule(moduleName: string): boolean {
         moduleName.startsWith('javax.')
     );
 }
-
-export const javaExtensions = ['.java'];
 
 const javaExcludedDirectories = ['.gradle', '.mvn'];
 

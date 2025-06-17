@@ -1,9 +1,8 @@
 import { LanguageExtractor } from '../types';
-import { createJavascriptExtractor, javascriptExtensions } from './javascript';
-import { createJavaExtractor, javaExtensions } from './java';
 import fs from 'fs/promises';
 import path from 'path';
 import { isIgnored } from './extractors.util';
+import { defaultPlugins } from './plugin-loader';
 
 export async function groupFilesByExtractor(
     repoPath: string,
@@ -14,28 +13,17 @@ export async function groupFilesByExtractor(
 
     const handledExtensions = new Set<string>();
 
-    // JavaScript / TypeScript
-    if (extensions.some((ext) => javascriptExtensions.includes(ext))) {
-        // json files are relevant for the creation of the extractor
-        const jsonFiles = groupedFilesByExtensions.get('.json') ?? [];
-        const jsExtractor = await createJavascriptExtractor(jsonFiles);
-
-        const files = javascriptExtensions.flatMap(
-            (ext) => groupedFilesByExtensions.get(ext) ?? [],
-        );
-        extractorToFilesMap.set(jsExtractor, files);
-        javascriptExtensions.forEach((ext) => handledExtensions.add(ext));
-    }
-
-    // Java
-    if (extensions.some((ext) => javaExtensions.includes(ext))) {
-        const javaExtractor = await createJavaExtractor(repoPath);
-
-        const files = javaExtensions.flatMap(
-            (ext) => groupedFilesByExtensions.get(ext) ?? [],
-        );
-        extractorToFilesMap.set(javaExtractor, files);
-        javaExtensions.forEach((ext) => handledExtensions.add(ext));
+    for (const plugin of defaultPlugins) {
+        if (plugin.extensions.some((ext) => extensions.includes(ext))) {
+            const extractor = await plugin.createExtractor(
+                groupedFilesByExtensions,
+            );
+            const files = plugin.extensions.flatMap(
+                (ext) => groupedFilesByExtensions.get(ext) ?? [],
+            );
+            extractorToFilesMap.set(extractor, files);
+            plugin.extensions.forEach((ext) => handledExtensions.add(ext));
+        }
     }
 
     // Log unhandled extensions

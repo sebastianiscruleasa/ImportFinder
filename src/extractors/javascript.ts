@@ -1,7 +1,7 @@
 import * as fs from 'fs/promises';
 import * as babelParser from '@babel/parser';
 import traverse from '@babel/traverse';
-import { ImportStatement, LanguageExtractor } from '../types';
+import { ImportStatement, LanguageExtractor, Plugin } from '../types';
 import {
     findProjectPath,
     getLanguageByExtension,
@@ -16,9 +16,15 @@ import {
     parseNpmLockV2Project,
 } from 'snyk-nodejs-lockfile-parser';
 
-export async function createJavascriptExtractor(
-    jsonFiles: string[],
+export const javaScriptPlugin: Plugin = {
+    extensions: ['.js', '.ts', '.jsx', '.tsx'],
+    createExtractor,
+};
+
+async function createExtractor(
+    groupedFilesByExtensions: Map<string, string[]>,
 ): Promise<LanguageExtractor> {
+    const jsonFiles = groupedFilesByExtensions.get('.json') ?? [];
     const jsOrTsConfigs = jsonFiles.filter(
         (file) =>
             file.endsWith('tsconfig.json') || file.endsWith('jsconfig.json'),
@@ -512,8 +518,6 @@ const nodeModules = new Set([
     'worker_threads',
     'zlib',
 ]);
-
-export const javascriptExtensions = ['.js', '.ts', '.jsx', '.tsx'];
 
 const javascriptExcludedDirectories = [
     '.nuxt',
