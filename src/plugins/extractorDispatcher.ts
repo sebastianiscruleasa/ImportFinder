@@ -1,8 +1,8 @@
 import { LanguageExtractor } from '../types';
 import fs from 'fs/promises';
 import path from 'path';
-import { isIgnored } from './extractors.util';
-import { defaultPlugins } from './plugin-loader';
+import { isIgnored } from './plugin.util';
+import { builtinPlugins } from './plugin-loader';
 
 export async function groupFilesByExtractor(
     repoPath: string,
@@ -13,7 +13,7 @@ export async function groupFilesByExtractor(
 
     const handledExtensions = new Set<string>();
 
-    for (const plugin of defaultPlugins) {
+    for (const plugin of builtinPlugins) {
         if (plugin.extensions.some((ext) => extensions.includes(ext))) {
             const extractor = await plugin.createExtractor(
                 groupedFilesByExtensions,

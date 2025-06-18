@@ -7,7 +7,7 @@ import {
     getLanguageByExtension,
     getRelativePathToRepo,
     isIgnored,
-} from './extractors.util';
+} from './plugin.util';
 import path from 'path';
 import {
     buildDepTreeFromFiles,

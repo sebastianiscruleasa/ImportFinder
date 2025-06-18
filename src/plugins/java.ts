@@ -7,7 +7,7 @@ import {
     getLanguageByExtension,
     getRelativePathToRepo,
     isIgnored,
-} from './extractors.util';
+} from './plugin.util';
 
 export const javaPlugin: Plugin = {
     extensions: ['.java'],
