@@ -11,6 +11,7 @@
     "@babel/parser": "7.26.2",
     "@babel/traverse": "7.25.9",
     "fs-extra": "11.2.0",
+    "jsonc-parser": "3.3.1",
     "snyk-nodejs-lockfile-parser": "1.60.1"
   },
   "devDependencies": {

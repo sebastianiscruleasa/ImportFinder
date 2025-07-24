@@ -1,4 +1,5 @@
 import * as fs from 'fs/promises';
+import { parse } from 'jsonc-parser';
 import * as babelParser from '@babel/parser';
 import traverse from '@babel/traverse';
 import { ImportStatement, LanguageExtractor, Plugin } from '../types';
@@ -266,7 +267,7 @@ async function extractLocalAbsoluteImportPrefixes(
     for (const configPath of configPaths) {
         try {
             const raw = await fs.readFile(configPath, 'utf8');
-            const parsed: TsConfig = JSON.parse(raw);
+            const parsed: TsConfig = parse(raw);
             const baseUrl = parsed.compilerOptions?.baseUrl;
             const paths = parsed.compilerOptions?.paths;
 
